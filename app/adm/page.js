@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'; // This prevents prerendering
 'use client';
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../firebase';
@@ -23,6 +24,42 @@ export default function AdminPage() {
   const [successMessage, setSuccessMessage] = useState(null);
   const [activeTab, setActiveTab] = useState('pending');
   
+
+  const ImagePreview = ({ screenshotData }) => {
+    // Only render the image on the client side
+    const [isClient, setIsClient] = useState(false);
+    
+    useEffect(() => {
+      setIsClient(true);
+    }, []);
+    
+    if (!isClient) {
+      // Return a placeholder during server-side rendering
+      return (
+        <div className="text-indigo-400 flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Loading preview...
+        </div>
+      );
+    }
+    
+    return (
+      <div>
+        <div 
+          className="h-24 w-24 bg-cover bg-center rounded-md border border-gray-600 shadow-md hover:border-indigo-500 transition-all cursor-pointer"
+          style={{ backgroundImage: `url(${screenshotData})` }}
+          onClick={() => window.open(screenshotData, '_blank')}
+          role="button"
+          tabIndex={0}
+        />
+        <div className="text-xs text-gray-500 mt-1">
+          Click to view
+        </div>
+      </div>
+    );
+  };
   
   // Admin logout
   const handleLogout = async () => {
@@ -355,32 +392,27 @@ const handleAdminLogin = async (e) => {
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            {user.paymentDetails?.screenshotData ? (
-                              <div>
-                                <a 
-                                  href={user.paymentDetails.screenshotData} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-indigo-400 hover:text-indigo-300 flex items-center"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                  View Full Size
-                                </a>
-                                <div className="mt-2">
-                                  <Image 
-                                    src={user.paymentDetails.screenshotData} 
-                                    alt="Payment screenshot" 
-                                    className="h-24 object-cover rounded-md border border-gray-600 shadow-md hover:border-indigo-500 transition-all cursor-pointer" 
-                                    onClick={() => window.open(user.paymentDetails.screenshotData, '_blank')}
-                                  />
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-gray-500 text-sm">No screenshot</span>
-                            )}
-                          </td>
+  {user.paymentDetails?.screenshotData ? (
+    <div>
+      <a 
+        href={user.paymentDetails.screenshotData} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="text-indigo-400 hover:text-indigo-300 flex items-center"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+        View Full Size
+      </a>
+      <div className="mt-2">
+        <ImagePreview screenshotData={user.paymentDetails.screenshotData} />
+      </div>
+    </div>
+  ) : (
+    <span className="text-gray-500 text-sm">No screenshot</span>
+  )}
+</td>
                           <td className="px-6 py-4">
                             <div className="flex space-x-2">
                               {activeTab === 'pending' && (
