@@ -1,5 +1,5 @@
-export const dynamic = 'force-dynamic'; // This prevents prerendering
 'use client';
+export const dynamic = 'force-dynamic'; // This prevents prerendering
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../firebase';
 import { 
