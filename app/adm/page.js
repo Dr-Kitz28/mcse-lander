@@ -11,6 +11,7 @@ import {
   orderBy 
 } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import Image from 'next/image';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -368,7 +369,7 @@ const handleAdminLogin = async (e) => {
                                   View Full Size
                                 </a>
                                 <div className="mt-2">
-                                  <img 
+                                  <Image 
                                     src={user.paymentDetails.screenshotData} 
                                     alt="Payment screenshot" 
                                     className="h-24 object-cover rounded-md border border-gray-600 shadow-md hover:border-indigo-500 transition-all cursor-pointer" 

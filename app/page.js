@@ -1327,12 +1327,12 @@ const handleUsernameChange = (e) => {
                 </div>
                 <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>Verify your email</h3>
                 <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                  We've sent a verification link to <span className="text-blue-300 font-medium">{user?.email}</span>.<br />
+                  We&apos;ve sent a verification link to <span className="text-blue-300 font-medium">{user?.email}</span>.<br />
                   Please check your inbox and click the link to verify your account.
                 </p>
                 <p className={`text-white/60 text-sm ${inter.variable} font-inter mb-8`}>
                   This page will automatically update once your email is verified.<br />
-                  If you don't see the email, check your spam folder.
+                  If you don&apos;t see the email, check your spam folder.
                 </p>
                 
                 <div className="flex flex-col items-center justify-center space-y-4">
@@ -1381,7 +1381,7 @@ const handleUsernameChange = (e) => {
             Your registration is complete! No payment required for Mahindra University students.
           </p>
           <p className={`text-white/70 ${inter.variable} font-inter`}>
-            We'll send you more information about the competition soon.
+            We&apos;ll send you more information about the competition soon.
           </p>
         </div>
       ) : (
@@ -1413,7 +1413,7 @@ const handleUsernameChange = (e) => {
               </div>
               <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>Payment Verification Failed</h3>
               <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                We couldn't verify your payment. This could be due to:
+                We couldn&apos;t verify your payment. This could be due to:
               </p>
               <ul className="text-left max-w-md mx-auto mb-8 text-white/70 space-y-1">
                 <li className="flex items-start">
@@ -1422,11 +1422,11 @@ const handleUsernameChange = (e) => {
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
-                  <span>Transaction amount didn't match the required payment</span>
+                  <span>Transaction amount didn&apos;t match the required payment</span>
                 </li>
                 <li className="flex items-start">
                   <span className="mr-2">•</span>
-                  <span>Screenshot was unclear or didn't match the transaction ID</span>
+                  <span>Screenshot was unclear or didn&apos;t match the transaction ID</span>
                 </li>
               </ul>
               <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
@@ -1460,7 +1460,7 @@ const handleUsernameChange = (e) => {
                 Great news! Your payment has been verified and your registration is now complete.
               </p>
               <p className={`text-white/60 text-sm ${inter.variable} font-inter`}>
-                We'll send you more information about the competition soon.
+                We&apos;ll send you more information about the competition soon.
               </p>
             </div>
           )}
