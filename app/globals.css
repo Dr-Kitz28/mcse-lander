@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 80px; /* Adds padding for fixed headers */
+  overflow-y: scroll; /* Prevents layout shift when navigating */
+  overscroll-behavior: contain; /* Prevents bouncing on some browsers */
+}
+
+/* For Safari which doesn't support scroll-behavior */
+@supports (-webkit-overflow-scrolling: touch) {
+  html {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Smooth transition for all interactive elements */
+a, button {
+  transition: all 0.2s ease-in-out;
+}
+
 @theme {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -17,10 +36,171 @@
   }
 }
 
-
-
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Adding this will make page transitions smoother */
+* {
+  box-sizing: border-box;
+}
+
+/* Eliminate flickering on hover states */
+* {
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Loader animations */
+@keyframes drawLine {
+  0% { stroke-dashoffset: 300; }
+  40% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes moveDot {
+  0% { transform: translateX(0); }
+  20% { opacity: 0.4; }
+  40% { opacity: 1; }
+  95% { opacity: 0.2; }
+  100% { transform: translateX(100px); opacity: 0; }
+}
+
+@keyframes growBar {
+  0% { height: 0; opacity: 0; }
+  50% { opacity: 1; }
+  90% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+@keyframes loadingDot {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.8); opacity: 1; }
+}
+
+.animate-draw-line {
+  animation: drawLine 2.5s ease-in-out forwards;
+}
+
+.animate-move-dot {
+  animation: moveDot 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-grow {
+  animation: growBar 1.2s ease-in-out infinite alternate;
+}
+
+.animate-loading-dot {
+  animation: loadingDot 1.3s infinite;
+}
+
+/* Add fade animations for content */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.6s ease-out forwards;
+}
+
+/* Add transition class for form changes */
+.transition-all {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 0.15s;
+}
+
+/* Custom animations for hover effects */
+@keyframes pulse-subtle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.hover-animation:hover {
+  animation: pulse-subtle 1s infinite;
+}
+
+/* Hide scrollbar but keep functionality */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.7);
+}
+
+/* Add these page loader fade animations */
+
+/* Animation for fade-out transition */
+@keyframes fadeOut {
+  0% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
+/* Apply to page loader */
+.page-loader {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgb(2, 2, 2);
+  z-index: 50;
+}
+
+/* Animation for fade-out */
+.page-loader-fade-out {
+  animation: fadeOut 0.7s ease-out forwards;
+}
+
+/* Animation for pulse text in loader */
+@keyframes pulseText {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.animate-pulse-text {
+  animation: pulseText 2s infinite;
+}
+
+/* Animation for bars in loader */
+@keyframes growBar {
+  0% { height: 0; opacity: 0; }
+  50% { opacity: 1; }
+  90% { opacity: 0.8; }
+  100% { opacity: 0; }
+}
+
+/* Use a simpler, more consistent animation for the bars */
+.bar-1 { height: 20px; animation-delay: 0.0s; }
+.bar-2 { height: 15px; animation-delay: 0.12s; }
+.bar-3 { height: 25px; animation-delay: 0.24s; }
+.bar-4 { height: 18px; animation-delay: 0.36s; }
+.bar-5 { height: 22px; animation-delay: 0.48s; }
+.bar-6 { height: 16px; animation-delay: 0.60s; }
+.bar-7 { height: 24px; animation-delay: 0.72s; }
+.bar-8 { height: 19px; animation-delay: 0.84s; }
+.bar-9 { height: 26px; animation-delay: 0.96s; }
+.bar-10 { height: 17px; animation-delay: 1.08s; }
+.bar-11 { height: 23px; animation-delay: 1.20s; }
+.bar-12 { height: 21px; animation-delay: 1.32s; }
+
+.animate-grow {
+  animation: growBar 1.2s ease-in-out infinite alternate;
 }
