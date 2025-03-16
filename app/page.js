@@ -826,9 +826,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col relative">
-      <PageLoader />
+      {/* <PageLoader /> */}
       {/* <div className="fixed inset-0 bg-gradient-to-br from-[#000016] to-[#01003D] z-0" /> */}
-      <div className="fixed inset-0 z-0">
+      {/* <div className="fixed inset-0 z-0">
         <video
           autoPlay
           muted
@@ -838,13 +838,13 @@ export default function Home() {
         >
           <source src="/bgfinal.mp4" type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-black/10"></div> {/* Overlay to darken the video */}
-      </div>
+        <div className="absolute inset-0 bg-black/10"></div> {/* Overlay to darken the video 
+      </div> */}
 
-      {/* Navbar */}
+      {/* Navbar 
       <nav className="relative z-10 w-full pt-10 px-10 md:px-15">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          {/* Logo */}
+          {/* Logo 
           <div className="flex-shrink-0">
             <Link href="/">
               <Image
@@ -857,7 +857,7 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Desktop Navigation Links */}
+          {/* Desktop Navigation Links 
           <div className={`hidden md:flex items-center space-x-8 ${crimson.className}`}>
             <Link href="#about" className="text-white hover:text-blue-300 transition-colors text-2xl">
               About
@@ -872,7 +872,7 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Mobile - Only Register Button */}
+          {/* Mobile - Only Register Button 
           <div className="md:hidden flex">
             <Link href="#register">
               <button className={`px-5 py-2 bg-blue-950/80 hover:bg-blue-900 text-white rounded-lg transition-colors text-xl ${crimson.className}`}>
@@ -881,12 +881,19 @@ export default function Home() {
             </Link>
           </div>
         </div>
-      </nav>
+      </nav>*/}
 
       {/* Main content - Hero Section */}
       <section className="min-h-[70vh] flex items-center justify-center z-10">
         <div className="max-w-4xl px-4 sm:px-10 md:px-15">
           <div className="text-white flex flex-col items-start">
+            <div className="inline-flex items-center px-5 py-2 rounded-full bg-blue-900/10 border border-green-700/30 backdrop-blur-sm mb-4 ml-5">
+              <div className="relative mr-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-green-400 animate-ping opacity-50"></div>
+              </div>
+              <span className="text-green-400 text-sm font-bold">Registrations</span>
+            </div>
             <h1 className={`text-6xl sm:text-7xl md:text-8xl mb-4 ${crimson.className} font-semibold px-4 sm:px-6 break-words`}>
               Markets move,<br />
               <span>clubs compete.</span>
@@ -1791,10 +1798,11 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="z-10 relative bg-[#000016]/80 backdrop-blur-sm py-8 border-t border-white/10">
+      {/* <footer className="z-10 relative bg-[#000016]/80 backdrop-blur-sm py-8 border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-10 md:px-15">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-0">
-            {/* Left - MCSE Logo */}
+          {/* For desktop: row layout with 3 items in a row 
+          <div className="hidden md:flex items-center justify-between">
+            {/* Left - MCSE Logo 
             <div className="flex-shrink-0">
               <Image
                 src="/mcsebanner.png"
@@ -1805,14 +1813,14 @@ export default function Home() {
               />
             </div>
 
-            {/* Center - Copyright Text */}
+            {/* Center - Copyright Text 
             <div className="text-center">
               <p className={`text-white/60 text-sm ${inter.variable} font-inter`}>
                 © {new Date().getFullYear()} All Rights Reserved. MU Mathematics Society.
               </p>
             </div>
 
-            {/* Right - Mathsoc Logo and Social Links */}
+            {/* Right - Mathsoc Logo and Social Links 
             <div className="flex items-center">
               <div className="mr-4">
                 <Image
@@ -1849,9 +1857,68 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          {/* For mobile: column layout with logos side by side 
+          <div className="md:hidden flex flex-col items-center space-y-6">
+            {/* Both logos side by side
+            <div className="flex justify-center items-center space-x-8 w-full">
+              <div className="flex-shrink-0">
+                <Image
+                  src="/mcsebanner.png"
+                  alt="MCSE Logo"
+                  width={150}
+                  height={75}
+                  className="object-contain"
+                />
+              </div>
+
+              <div className="flex items-center">
+                <div className="mr-3">
+                  <Image
+                    src="/mathsoclogo.png"
+                    alt="Mathsoc Logo"
+                    width={60}
+                    height={60}
+                    className="object-contain"
+                  />
+                </div>
+                <div className="text-white flex flex-col items-start">
+                  <p className={`${crimson.className} text-sm font-semibold`}>
+                    {"With <3"}
+                  </p>
+                  <p className={`${crimson.className} text-lg font-semibold mb-1`}>Mathsoc</p>
+                  <div className="flex space-x-3">
+                    <a
+                      href="https://www.instagram.com/mathsoc.mu/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-white/70 hover:text-white transition-colors"
+                    >
+                      <Instagram size={16} />
+                    </a>
+                    <a
+                      href="https://www.linkedin.com/company/mathematics-club-mu/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-white/70 hover:text-white transition-colors"
+                    >
+                      <Linkedin size={16} />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Copyright text below 
+            <div className="text-center">
+              <p className={`text-white/60 text-sm ${inter.variable} font-inter`}>
+                © {new Date().getFullYear()} All Rights Reserved. MU Mathematics Society.
+              </p>
+            </div>
+          </div>
         </div>
-      </footer>
-      {/* Help/Contact Button */}
+      </footer> */}
+      {/* Help/Contact Button
       <div className="fixed bottom-6 right-6 z-50">
         <button
           onClick={() => setShowContactModal(!showContactModal)}
@@ -1865,7 +1932,7 @@ export default function Home() {
           </svg>
         </button>
 
-        {/* Contact Modal */}
+        {/* Contact Modal 
         {showContactModal && (
           <div className="absolute bottom-16 right-0 w-72 bg-slate-900/95 backdrop-blur-sm border border-white/10 rounded-lg shadow-xl p-4 animate-fadeIn">
             <div className="flex justify-between items-center mb-3">
@@ -1884,7 +1951,7 @@ export default function Home() {
               {/* <div>
                 <p className="text-white/80 text-sm mb-1">Email us:</p>
                 <a href="mailto:mcse@mahindra.edu" className="text-blue-300 hover:text-blue-200 text-sm">mcse@mahindra.edu</a>
-              </div> */}
+              </div> 
               <div>
                 <p className="text-white/80 text-sm mb-1">Contact:</p>
                 <a href="tel:+919876543210" className="text-blue-300 hover:text-blue-200 text-sm">+91 99667 07911</a>
@@ -1892,14 +1959,14 @@ export default function Home() {
               {/* <div>
                 <p className="text-white/80 text-sm mb-1">Join our Discord:</p>
                 <a href="https://discord.gg/mcse" target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:text-blue-200 text-sm">discord.gg/mcse</a>
-              </div> */}
+              </div> 
             </div>
             <div className="text-white/50 text-xs mt-2 border-t border-white/10 pt-2">
               Contact for help / Report any bugs
             </div>
           </div>
         )}
-      </div>
+      </div>*/}
     </div>
   );
 };

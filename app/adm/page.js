@@ -2,17 +2,30 @@
 export const dynamic = 'force-dynamic'; // This prevents prerendering
 import { useState, useEffect } from 'react';
 import { auth, db } from '../../firebase';
-import { 
-  collection, 
-  getDocs, 
-  doc, 
-  updateDoc, 
-  query, 
-  where, 
-  orderBy 
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  query,
+  where,
+  orderBy
 } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import Image from 'next/image';
+import { Crimson_Text, Inter } from 'next/font/google';
+
+// Add the font configurations
+const crimson = Crimson_Text({
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  variable: '--font-crimson',
+});
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+});
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -23,16 +36,16 @@ export default function AdminPage() {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [activeTab, setActiveTab] = useState('pending');
-  
+
 
   const ImagePreview = ({ screenshotData }) => {
     // Only render the image on the client side
     const [isClient, setIsClient] = useState(false);
-    
+
     useEffect(() => {
       setIsClient(true);
     }, []);
-    
+
     if (!isClient) {
       // Return a placeholder during server-side rendering
       return (
@@ -44,10 +57,10 @@ export default function AdminPage() {
         </div>
       );
     }
-    
+
     return (
       <div>
-        <div 
+        <div
           className="h-24 w-24 bg-cover bg-center rounded-md border border-gray-600 shadow-md hover:border-indigo-500 transition-all cursor-pointer"
           style={{ backgroundImage: `url(${screenshotData})` }}
           onClick={() => window.open(screenshotData, '_blank')}
@@ -60,7 +73,7 @@ export default function AdminPage() {
       </div>
     );
   };
-  
+
   // Admin logout
   const handleLogout = async () => {
     try {
@@ -70,15 +83,15 @@ export default function AdminPage() {
       console.error('Error signing out:', err);
     }
   };
-  
+
   // Fetch users based on payment status
   // Update your fetchUsers function
-// Modified fetchUsers function to handle missing index
-const fetchUsers = async (status = 'pending') => {
+  // Modified fetchUsers function to handle missing index
+  const fetchUsers = async (status = 'pending') => {
     setLoading(true);
     setActiveTab(status);
-    setError(null); 
-    
+    setError(null);
+
     try {
       // Ensure user is authenticated before proceeding
       if (!auth.currentUser) {
@@ -87,29 +100,29 @@ const fetchUsers = async (status = 'pending') => {
         setLoading(false);
         return;
       }
-      
+
       console.log("Current user:", auth.currentUser?.email);
       console.log("Fetching users with status:", status);
-      
+
       let usersList = [];
-      
+
       try {
         // First try with basic query (no ordering) which should require fewer indexes
         const basicQuery = query(
-          collection(db, 'users'), 
+          collection(db, 'users'),
           where('paymentStatus', '==', status)
         );
-        
+
         const querySnapshot = await getDocs(basicQuery);
         console.log("Query executed, doc count:", querySnapshot.size);
-        
+
         querySnapshot.forEach((doc) => {
           usersList.push({
             id: doc.id,
             ...doc.data()
           });
         });
-        
+
         // Sort the results in memory instead of using orderBy
         usersList.sort((a, b) => {
           if (a.createdAt && b.createdAt) {
@@ -117,22 +130,22 @@ const fetchUsers = async (status = 'pending') => {
           }
           return 0;
         });
-        
+
       } catch (err) {
         console.error("Query error:", err.code, err.message);
-        
+
         if (err.code === 'permission-denied') {
           throw new Error('Access denied. Your account does not have admin permissions.');
         } else {
           throw err;
         }
       }
-      
+
       setUsers(usersList);
       console.log("Users fetched:", usersList.length);
     } catch (err) {
       console.error('Error fetching users:', err.code, err.message);
-      
+
       if (err.code === 'permission-denied' || err.message.includes('permission')) {
         setError('Access denied. Your account does not have admin permissions.');
       } else if (err.message.includes('index')) {
@@ -141,79 +154,82 @@ const fetchUsers = async (status = 'pending') => {
         setError(`Failed to load payment data: ${err.message}`);
       }
     }
-    
+
     setLoading(false);
   };
-  
-const handleAdminLogin = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError(null);
-  
-  try {
-    const email = adminEmail.trim();
-    const password = adminPassword;
-    
-    // Check if this is a valid admin email
-    if (email !== 'mcseattop@mcse.com' && email !== 'admin@mathsocmu.com') {
-      setError('This email does not have admin privileges');
-      setLoading(false);
-      return;
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const email = adminEmail.trim();
+      const password = adminPassword;
+
+      // Check if this is a valid admin email
+      if (email !== 'mcseattop@mcse.com' && email !== 'admin@mathsocmu.com') {
+        setError('This email does not have admin privileges');
+        setLoading(false);
+        return;
+      }
+
+      // Sign in with credentials
+      await signInWithEmailAndPassword(auth, email, password);
+      console.log("Authentication successful");
+
+      localStorage.setItem('accountType', 'admin');
+      document.cookie = `accountType=admin; path=/; max-age=${60 * 60 * 24 * 7}`; // 7 days
+
+      // Wait a moment for the auth state to fully update
+      setTimeout(() => {
+        setIsAuthenticated(true);
+        fetchUsers();
+      }, 500);
+    } catch (err) {
+      console.error("Auth error:", err.code, err.message);
+
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-email' || err.code === 'auth/user-not-found') {
+        setError('Invalid email or password');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many failed login attempts. Please try again later.');
+      } else {
+        setError(`Login error: ${err.message}`);
+      }
     }
-    
-    // Sign in with credentials
-    await signInWithEmailAndPassword(auth, email, password);
-    console.log("Authentication successful");
-    
-    // Wait a moment for the auth state to fully update
-    setTimeout(() => {
-      setIsAuthenticated(true);
-      fetchUsers();
-    }, 500);
-  } catch (err) {
-    console.error("Auth error:", err.code, err.message);
-    
-    if (err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-email' || err.code === 'auth/user-not-found') {
-      setError('Invalid email or password');
-    } else if (err.code === 'auth/too-many-requests') {
-      setError('Too many failed login attempts. Please try again later.');
-    } else {
-      setError(`Login error: ${err.message}`);
-    }
-  }
-  
-  setLoading(false);
-};
-  
+
+    setLoading(false);
+  };
+
   // Update payment status
   const updatePaymentStatus = async (userId, newStatus) => {
     setLoading(true);
     setError(null);
     setSuccessMessage(null);
-    
+
     try {
       const userRef = doc(db, 'users', userId);
-      
+
       await updateDoc(userRef, {
         paymentStatus: newStatus,
         updatedAt: new Date().toISOString(),
         updatedBy: auth.currentUser.email // Track who made the change
       });
-      
+
       // Remove the user from the current list
       setUsers(users.filter(user => user.id !== userId));
       setSuccessMessage(`Payment status updated to ${newStatus}`);
-      
+
       // Optionally refetch the current tab after a short delay
       setTimeout(() => {
         fetchUsers(activeTab);
       }, 1500);
-      
+
     } catch (err) {
       console.error('Error updating payment status:', err);
       setError(`Failed to update payment status: ${err.message}`);
     }
-    
+
     setLoading(false);
   };
 
@@ -226,51 +242,51 @@ const handleAdminLogin = async (e) => {
         setIsAuthenticated(false);
       }
     });
-    
+
     return () => unsubscribe();
   }, []);
-  
+
   return (
-    <div className="min-h-screen bg-gray-900 p-6 text-gray-200">
+    <div className={`min-h-screen pt-8 pb-16 px-4 sm:px-6 lg:px-8 z-10 text-white/90 ${crimson.variable} ${inter.variable}`}>
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-indigo-300 border-b border-gray-700 pb-4">MCSE Admin Panel</h1>
-        
+        <h1 className={`text-3xl sm:text-4xl text-white font-bold ${crimson.className} mb-6 border-b border-white/10 pb-4`}>MCSE Admin Panel</h1>
+
         {!isAuthenticated ? (
-          <div className="bg-gray-800 p-8 rounded-lg shadow-lg max-w-md mx-auto border border-gray-700">
+          <div className="bg-slate-900/30 backdrop-blur-sm border border-white/10 rounded-lg p-8 shadow-lg max-w-md mx-auto">
             <h2 className="text-2xl font-semibold mb-6 text-white">Admin Login</h2>
-            
+
             {error && (
               <div className="bg-red-900/50 border border-red-500/50 text-red-200 p-4 rounded mb-6">
                 {error}
               </div>
             )}
-            
+
             <form onSubmit={handleAdminLogin}>
               <div className="mb-5">
                 <label className="block text-gray-300 mb-2 font-medium">Email</label>
                 <input
                   type="email"
-                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  className="w-full bg-slate-800/60 border border-white/20 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   required
                   value={adminEmail}
                   onChange={(e) => setAdminEmail(e.target.value)}
                 />
               </div>
-              
+
               <div className="mb-6">
                 <label className="block text-gray-300 mb-2 font-medium">Password</label>
                 <input
                   type="password"
-                  className="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  className="w-full bg-slate-800/60 border border-white/20 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   required
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                 />
               </div>
-              
+
               <button
                 type="submit"
-                className="w-full py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors font-medium shadow-md"
+                className="w-full py-3 rounded-lg transition-all backdrop-blur-sm text-white bg-blue-600/40 hover:bg-blue-500/40 font-medium"
                 disabled={loading}
               >
                 {loading ? (
@@ -289,26 +305,28 @@ const handleAdminLogin = async (e) => {
           <div>
             <div className="flex justify-between items-center mb-8">
               <div className="flex space-x-3">
-                <button 
-                  className={`px-5 py-2.5 rounded-md shadow-md transition-all ${activeTab === 'pending' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                <button
+                  className={`px-5 py-2.5 rounded-md transition-all ${activeTab === 'pending'
+                    ? 'bg-blue-600/30 text-blue-300'
+                    : 'bg-slate-900/40 text-white/70 hover:bg-slate-700/40'}`}
                   onClick={() => fetchUsers('pending')}
                 >
                   Pending
                 </button>
-                <button 
+                <button
                   className={`px-5 py-2.5 rounded-md shadow-md transition-all ${activeTab === 'failed' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                   onClick={() => fetchUsers('failed')}
                 >
                   Failed
                 </button>
-                <button 
+                <button
                   className={`px-5 py-2.5 rounded-md shadow-md transition-all ${activeTab === 'success' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
                   onClick={() => fetchUsers('success')}
                 >
                   Success
                 </button>
               </div>
-              
+
               <button
                 className="bg-gray-700 text-gray-200 px-5 py-2.5 rounded-md hover:bg-gray-600 transition-colors shadow-md flex items-center"
                 onClick={handleLogout}
@@ -319,19 +337,19 @@ const handleAdminLogin = async (e) => {
                 Logout
               </button>
             </div>
-            
+
             {error && (
               <div className="bg-red-900/50 border border-red-500/50 text-red-200 p-4 rounded-md mb-6">
                 {error}
               </div>
             )}
-            
+
             {successMessage && (
               <div className="bg-green-900/50 border border-green-500/50 text-green-200 p-4 rounded-md mb-6">
                 {successMessage}
               </div>
             )}
-            
+
             {loading ? (
               <div className="text-center py-16 bg-gray-800 rounded-md shadow-md border border-gray-700">
                 <div className="animate-spin w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full mx-auto mb-4"></div>
@@ -345,7 +363,7 @@ const handleAdminLogin = async (e) => {
                 <p className="text-gray-400 text-lg">No {activeTab} payments found.</p>
               </div>
             ) : (
-              <div className="bg-gray-800 rounded-lg shadow-md overflow-hidden border border-gray-700">
+              <div className="bg-slate-900/30 backdrop-blur-sm border border-white/10 rounded-lg shadow-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-700">
                     <thead className="bg-gray-900">
@@ -392,27 +410,27 @@ const handleAdminLogin = async (e) => {
                             )}
                           </td>
                           <td className="px-6 py-4">
-  {user.paymentDetails?.screenshotData ? (
-    <div>
-      <a 
-        href={user.paymentDetails.screenshotData} 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="text-indigo-400 hover:text-indigo-300 flex items-center"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-        </svg>
-        View Full Size
-      </a>
-      <div className="mt-2">
-        <ImagePreview screenshotData={user.paymentDetails.screenshotData} />
-      </div>
-    </div>
-  ) : (
-    <span className="text-gray-500 text-sm">No screenshot</span>
-  )}
-</td>
+                            {user.paymentDetails?.screenshotData ? (
+                              <div>
+                                <a
+                                  href={user.paymentDetails.screenshotData}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-400 hover:text-indigo-300 flex items-center"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                  View Full Size
+                                </a>
+                                <div className="mt-2">
+                                  <ImagePreview screenshotData={user.paymentDetails.screenshotData} />
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-500 text-sm">No screenshot</span>
+                            )}
+                          </td>
                           <td className="px-6 py-4">
                             <div className="flex space-x-2">
                               {activeTab === 'pending' && (
@@ -470,7 +488,7 @@ const handleAdminLogin = async (e) => {
             )}
           </div>
         )}
-        
+
         {/* Footer */}
         <div className="mt-12 pt-6 border-t border-gray-800 text-center text-gray-500 text-sm">
           <p>MCSE Admin Panel © {new Date().getFullYear()}</p>
