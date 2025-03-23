@@ -10,90 +10,14 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
-  deleteUser
+  deleteUser,
+  updatePassword,
+  EmailAuthProvider,
+  reauthenticateWithCredential
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, query, where, getDocs, limit, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs, limit, deleteDoc, writeBatch, addDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-
-function PageLoader() {
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Simulate loading delay and then fade out
-    const timer = setTimeout(() => {
-      const loader = document.querySelector('.page-loader');
-      if (loader) {
-        loader.classList.add('page-loader-fade-out');
-      }
-
-      // Set state after animation completes
-      setTimeout(() => {
-        setIsLoading(false);
-      }, 700); // Match the animation duration
-    }, 1800);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (!isLoading) return null;
-
-  // Use predefined classes for consistent server and client rendering
-  return (
-    <div className="page-loader">
-      <div className="relative w-72 h-40 mb-8">
-        <svg
-          className="w-full h-full"
-          viewBox="0 0 100 50"
-          preserveAspectRatio="none"
-        >
-          <path
-            d="M0,25 L10,30 L20,15 L30,25 L40,20 L50,10 L60,30 L70,20 L80,25 L90,5 L100,15"
-            fill="none"
-            stroke="white"
-            strokeWidth="1.5"
-            strokeDasharray="300"
-            strokeDashoffset="300"
-            className="animate-draw-line"
-          />
-
-          <path
-            d="M0,30 L15,35 L25,20 L40,35 L55,25 L70,30 L85,15 L100,20"
-            fill="none"
-            stroke="white"
-            strokeWidth="0.8"
-            strokeOpacity="0.4"
-            className="animate-fade-line"
-            style={{ animationDelay: '0.3s' }}
-          />
-        </svg>
-
-        <div className="absolute inset-0 -z-10 opacity-30">
-          {/* Use fixed classes instead of random values */}
-          {[...Array(12)].map((_, i) => (
-            <div
-              key={i}
-              className={`absolute w-0.5 bg-white animate-grow bar-${i + 1}`}
-              style={{
-                left: `${5 + i * 8}%`,
-                bottom: `${10 + (i % 4) * 10}%`,
-                animationDuration: `${1.2 + (i % 3) * 0.3}s`,
-                opacity: 0.5
-              }}
-            ></div>
-          ))}
-        </div>
-      </div>
-
-      <div className="text-center relative z-10">
-        <h2 className={`text-5xl text-white font-semibold mb-3 ${crimson.className} animate-pulse-text`}>
-          MCSE
-        </h2>
-        {/* <div className="h-0.5 w-24 bg-white/30 mx-auto mt-2"></div>
-        <p className="text-white/70 text-sm mt-3"></p> */}
-      </div>
-    </div>
-  );
-}
+import { sanitizeUsername, normalizeEmail } from '../utils/sanitize';
 
 // Load Crimson Text font
 const crimson = Crimson_Text({
@@ -108,39 +32,33 @@ const inter = Inter({
 });
 
 export default function Home() {
+  // Core mobile/UI states
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordsMatch, setPasswordsMatch] = useState(true);
-  const [passwordStrength, setPasswordStrength] = useState(0);
-  const [university, setUniversity] = useState('');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [universityName, setUniversityName] = useState('');
+  const [showContactModal, setShowContactModal] = useState(false);
 
-  // Registration and verification states
+  // Auth states
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [registrationStep, setRegistrationStep] = useState('form'); // form, verifying, payment
-  const [paymentDetails, setPaymentDetails] = useState({
-    transactionId: '',
-    remarks: '',
-    screenshot: null
-  });
-  const [paymentError, setPaymentError] = useState(null);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState('pending');
-  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-  const [usernameError, setUsernameError] = useState(null);
-  // Add these new state variables with your other state declarations:
-  const [showLoginForm, setShowLoginForm] = useState(false);
+  const [success, setSuccess] = useState(null); // New for success messages
+
+  // Login states
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
+
+  // Profile setup states
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [isFirstLogin, setIsFirstLogin] = useState(false);
+
+  // Username validation states (keep existing)
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState(null);
   const [debouncedUsername, setDebouncedUsername] = useState('');
-  const [showContactModal, setShowContactModal] = useState(false);
+
+  // Registration flow control
+  const [registrationStep, setRegistrationStep] = useState('login'); // login, profile-setup, success
 
 
 
@@ -179,24 +97,118 @@ export default function Home() {
   }, [debouncedUsername]);
 
 
+  // const handlePasswordReset = async () => {
+  //   if (!loginEmail) {
+  //     setError("Please enter your email address first");
+  //     return;
+  //   }
+
+  //   setLoading(true);
+  //   try {
+  //     // First check if this email is in the approved_emails collection
+  //     const normalizedEmail = loginEmail.toLowerCase().trim();
+  //     const approvedEmailDoc = await getDoc(doc(db, 'approved_emails', normalizedEmail));
+
+  //     if (!approvedEmailDoc.exists()) {
+  //       setError("This email is not registered. Please register through the Unifest site first.");
+  //       setLoading(false);
+  //       return;
+  //     }
+
+  //     // If email is approved, send the reset password email
+  //     await sendPasswordResetEmail(auth, normalizedEmail);
+  //     setResetEmailSent(true);
+  //     setError(null);
+  //     setSuccess("Password reset email sent! Please check your inbox and spam folder.");
+  //   } catch (err) {
+  //     console.error("Password reset error:", err);
+
+  //     // Handle specific Firebase Auth errors
+  //     if (err.code === 'auth/user-not-found') {
+  //       setError('This email is not registered. Please register through the Unifest site first.');
+  //     } else if (err.code === 'auth/invalid-email') {
+  //       setError('Please enter a valid email address.');
+  //     } else if (err.code === 'auth/too-many-requests') {
+  //       setError('Too many attempts. Please try again later.');
+  //     } else {
+  //       setError(`Failed to send reset email: ${err.message}`);
+  //     }
+  //   }
+  //   setLoading(false);
+  // };
+
   const handlePasswordReset = async () => {
     if (!loginEmail) {
       setError("Please enter your email address first");
       return;
     }
 
+    // Check local storage for too many reset attempts
+    const resetAttempts = JSON.parse(localStorage.getItem('resetAttempts') || '{"count": 0, "timestamp": 0}');
+    const now = Date.now();
+
+    // Reset counter after 24 hours
+    if (now - resetAttempts.timestamp > 24 * 60 * 60 * 1000) {
+      resetAttempts.count = 0;
+    }
+
+    // Limit to 3 attempts per day
+    if (resetAttempts.count >= 3) {
+      setError("Too many password reset attempts. Please try again tomorrow or contact support.");
+      return;
+    }
+
     setLoading(true);
     try {
-      await sendPasswordResetEmail(auth, loginEmail);
+      // Add small random delay to prevent timing attacks (200-500ms)
+      await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
+
+      // Normalized and sanitized email
+      const normalizedEmail = loginEmail.toLowerCase().trim();
+
+      // First check if this email is in the approved_emails collection
+      const approvedEmailDoc = await getDoc(doc(db, 'approved_emails', normalizedEmail));
+
+      if (!approvedEmailDoc.exists()) {
+        // Don't increment counter for non-registered emails
+        setError("This email is not registered. Please register through the Unifest site first.");
+        setLoading(false);
+        return;
+      }
+
+      // If email is approved, send the reset password email
+      await sendPasswordResetEmail(auth, normalizedEmail);
+
+      // Increment reset attempt counter
+      resetAttempts.count++;
+      resetAttempts.timestamp = now;
+      localStorage.setItem('resetAttempts', JSON.stringify(resetAttempts));
+
       setResetEmailSent(true);
       setError(null);
+      setSuccess("Password reset email sent! Please check your inbox and spam folder.");
+
+      // Log for monitoring (in production, send to analytics)
+      console.info(`Password reset requested for: ${normalizedEmail.slice(0, 3)}...${normalizedEmail.slice(-4)}`);
+
     } catch (err) {
       console.error("Password reset error:", err);
+
+      // Handle specific Firebase Auth errors
       if (err.code === 'auth/user-not-found') {
-        setError('No account found with this email.');
+        setError('This email is not registered. Please register through the Unifest site first.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Please enter a valid email address.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many attempts. Please try again later.');
       } else {
-        setError(`Failed to send reset email: ${err.message}`);
+        setError(`Failed to send reset email. Please try again later.`);
       }
+
+      // Still increment counter for failed attempts
+      resetAttempts.count++;
+      resetAttempts.timestamp = now;
+      localStorage.setItem('resetAttempts', JSON.stringify(resetAttempts));
     }
     setLoading(false);
   };
@@ -206,28 +218,14 @@ export default function Home() {
     setLoading(true);
     try {
       await auth.signOut();
-
-      // Reset all form state
-      setRegistrationStep('form');
-      setShowLoginForm(false);
+      // Reset state
       setUser(null);
+      setRegistrationStep('login');
+      setIsFirstLogin(false);
       setName('');
-      setEmail('');
       setUsername('');
-      setUniversity('');
-      setUniversityName('');
-      setPassword('');
-      setConfirmPassword('');
-      setPasswordStrength(0);
-      setPaymentDetails({
-        transactionId: '',
-        remarks: '',
-        screenshot: null
-      });
-      setPaymentSuccess(false);
+      setSuccess(null);
       setError(null);
-
-      console.log("User signed out successfully");
     } catch (err) {
       console.error("Error signing out:", err);
       setError(`Failed to sign out: ${err.message}`);
@@ -235,150 +233,189 @@ export default function Home() {
     setLoading(false);
   };
 
+  // const handleLoginSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setLoading(true);
+  //   setError(null);
+  //   setSuccess(null);
+
+  //   try {
+  //     // Sign in with email and password
+  //     const userCredential = await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+  //     const currentUser = userCredential.user;
+  //     setUser(currentUser);
+
+  //     // Auth state listener will handle the rest
+  //   } catch (err) {
+  //     console.error("Login error:", err);
+
+  //     if (err.code === 'auth/invalid-email') {
+  //       setError('Please enter a valid email address');
+  //     } else if (err.code === 'auth/user-not-found') {
+  //       setError('No account found with this email. Please contact administrator.');
+  //     } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+  //       setError('Incorrect email or password. Please try again.');
+  //     } else if (err.code === 'auth/too-many-requests') {
+  //       setError('Too many failed login attempts. Please try again later or reset your password.');
+  //     } else {
+  //       setError(`Login failed: ${err.message}`);
+  //     }
+  //   }
+
+  //   setLoading(false);
+  // };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
+
+    // Get login attempts from local storage
+    const loginAttempts = JSON.parse(localStorage.getItem('loginAttempts') || '{"count": 0, "timestamp": 0}');
+    const now = Date.now();
+
+    // Reset counter after 30 minutes
+    if (now - loginAttempts.timestamp > 1800000) {
+      loginAttempts.count = 0;
+    }
+
+    // Progressive delay for brute force protection
+    if (loginAttempts.count >= 3) {
+      const delayTime = Math.min(2000, loginAttempts.count * 500);
+      await new Promise(resolve => setTimeout(resolve, delayTime));
+    }
 
     try {
-      // Sign in with email and password
-      const userCredential = await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
-      const existingUser = userCredential.user;
-      setUser(existingUser);
+      // Security: Always add a small random delay to prevent timing attacks
+      await new Promise(resolve => setTimeout(resolve, 200 + Math.random() * 300));
 
-      console.log("Login successful", existingUser);
+      // Sanitize and normalize email
+      const sanitizedEmail = normalizeEmail(loginEmail);
 
-      try {
-        // Get user data from Firestore
-        const userDoc = await getDoc(doc(db, 'users', existingUser.uid));
+      // Sign in with Firebase
+      const userCredential = await signInWithEmailAndPassword(auth, sanitizedEmail, loginPassword);
+      const currentUser = userCredential.user;
 
-        if (userDoc.exists()) {
-          // User has completed profile setup
-          const userData = userDoc.data();
-          setUsername(userData.username || '');
-          setName(userData.name || '');
-          setUniversity(userData.university || '');
-          setPaymentStatus(userData.paymentStatus || 'pending');
-          setPaymentSuccess(!!userData.paymentDetails);
-          setRegistrationStep('payment');
-        } else {
-          // User is verified but hasn't set up profile
-          if (existingUser.emailVerified) {
-            setRegistrationStep('profile-setup');
-          } else {
-            setRegistrationStep('verifying');
-          }
-        }
-      } catch (firestoreErr) {
-        console.error("Firestore error:", firestoreErr);
-        // Default flow based on verification
-        if (existingUser.emailVerified) {
-          setRegistrationStep('profile-setup');
-        } else {
-          setRegistrationStep('verifying');
-        }
-      }
+      // Reset failed attempts on success
+      localStorage.setItem('loginAttempts', JSON.stringify({ "count": 0, "timestamp": now }));
+
+      setUser(currentUser);
+
     } catch (err) {
-      console.error("Auth error:", err);
+      console.error("Login error:", err);
 
-      if (err.code === 'auth/invalid-email') {
-        setError('Please enter a valid email address');
-      } else if (err.code === 'auth/user-not-found') {
-        setError('No account found with this email. Please register first.');
-      } else if (err.code === 'auth/wrong-password') {
-        setError('Incorrect password. Please try again.');
-      } else if (err.code === 'auth/too-many-requests') {
+      // Update failed attempts
+      loginAttempts.count++;
+      loginAttempts.timestamp = now;
+      localStorage.setItem('loginAttempts', JSON.stringify(loginAttempts));
+
+      // Generic error for first attempts, more specific for repeated failures
+      if (loginAttempts.count >= 3) {
         setError('Too many failed login attempts. Please try again later or reset your password.');
-      } else if (err.code === 'auth/invalid-credential') {
-        setError('Invalid email or password. Please check your credentials.');
       } else {
-        setError(`Sign-in failed: ${err.message}`);
+        if (err.code === 'auth/invalid-email') {
+          setError('Please enter a valid email address');
+        } else if (err.code === 'auth/user-not-found') {
+          setError('No account found with this email. Please contact administrator.');
+        } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+          setError('Incorrect email or password. Please try again.');
+        } else if (err.code === 'auth/too-many-requests') {
+          setError('Too many failed login attempts. Please try again later or reset your password.');
+        } else {
+          setError(`Login failed: ${err.message}`);
+        }
       }
     }
 
     setLoading(false);
   };
-  // Add a handler function
-  const handleUniversityChange = (e) => {
-    setUniversity(e.target.value);
-  };
-
-  const commonEmailDomains = [
-    'gmail.com', 'outlook.com', 'yahoo.com', 'hotmail.com',
-    'tutanota.com', 'skiff.com', 'icloud.com', 'protonmail.com',
-    'aol.com', 'zoho.com', 'mail.com', 'yandex.com', 'gmx.com'
-  ];
-
-  const checkPasswordStrength = (pass) => {
-    let strength = 0;
-    if (pass.length >= 8) strength++;
-    if (pass.match(/[a-z]/g) && pass.match(/[A-Z]/g)) strength++;
-    if (pass.match(/[0-9]/g)) strength++;
-    if (pass.match(/[^a-zA-Z0-9]/g)) strength++;
-    setPasswordStrength(strength);
-    return strength;
-  };
-
-  const handlePasswordChange = (e) => {
-    const newPassword = e.target.value;
-    setPassword(newPassword);
-    checkPasswordStrength(newPassword);
-    if (confirmPassword) {
-      setPasswordsMatch(confirmPassword === newPassword);
-    }
-  };
-
-  const handleConfirmPasswordChange = (e) => {
-    const confirmPass = e.target.value;
-    setConfirmPassword(confirmPass);
-    setPasswordsMatch(password === confirmPass);
-  };
 
   useEffect(() => {
-    // Normal auth state change listener without refresh reset
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
 
-        // Check if user is verified and get payment status if applicable
-        if (currentUser.emailVerified) {
-          try {
-            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
+        try {
+          // First check if email is approved
+          const approvedEmailDoc = await getDoc(doc(db, 'approved_emails', currentUser.email));
 
-              // Set payment status from Firestore
-              if (userData.paymentStatus) {
-                setPaymentStatus(userData.paymentStatus);
-              }
-
-              // Set university value for rendering the correct UI
-              if (userData.university) {
-                setUniversity(userData.university);
-              }
-
-              // Check if they have submitted payment details already
-              if (userData.paymentDetails) {
-                setPaymentSuccess(true);
-              }
-
-              setRegistrationStep('payment');
-            }
-          } catch (error) {
-            console.error("Error fetching user data:", error);
+          if (!approvedEmailDoc.exists()) {
+            console.log("Email not in approved list:", currentUser.email);
+            setError("Your account is not authorized. Please contact administrator.");
+            await auth.signOut();
+            setUser(null);
+            setRegistrationStep('login');
+            return;
           }
-        } else {
-          setRegistrationStep('verifying');
+
+          // Clean up email to lowercase for consistent querying
+          const userEmail = currentUser.email.toLowerCase().trim();
+          console.log("Checking user profile for email:", userEmail);
+
+          try {
+            // Query user profiles by email field
+            const profilesQuery = query(
+              collection(db, 'user_profiles'),
+              where('email', '==', userEmail),
+              limit(1)
+            );
+
+            const profileSnapshot = await getDocs(profilesQuery);
+
+            if (!profileSnapshot.empty) {
+              // Profile exists, but need to check if username is set
+              const profileDoc = profileSnapshot.docs[0];
+              const userData = profileDoc.data();
+
+              console.log("Found user profile:", userData);
+
+              // Check if username exists
+              if (userData.username) {
+                // User has username set, proceed to success
+                setUsername(userData.username);
+                localStorage.setItem('userProfileId', profileDoc.id);
+                localStorage.setItem('userUsername', userData.username);
+                setRegistrationStep('success');
+                setIsFirstLogin(false);
+              } else {
+                // Profile exists but no username - redirect to profile setup
+                console.log("Profile exists but username not set, directing to profile setup");
+                setRegistrationStep('profile-setup');
+                setIsFirstLogin(true);
+              }
+            } else {
+              // Profile doesn't exist at all
+              console.log("Profile doesn't exist, proceeding to profile setup");
+              setRegistrationStep('profile-setup');
+              setIsFirstLogin(true);
+            }
+          } catch (profileError) {
+            console.error("Error retrieving user profile:", profileError);
+
+            // Permission denied is expected for first-time users
+            if (profileError.code === 'permission-denied') {
+              console.log("Permission denied for reading profile - proceeding to profile setup");
+              setRegistrationStep('profile-setup');
+              setIsFirstLogin(true);
+            } else {
+              setError(`Error retrieving profile: ${profileError.message}`);
+            }
+          }
+        } catch (error) {
+          console.error("Error checking approved email:", error);
+          setError("An error occurred. Please try again.");
         }
       } else {
-        // User is not logged in, show the form
-        setRegistrationStep('form');
+        // User not logged in
         setUser(null);
+        setRegistrationStep('login');
+        setIsFirstLogin(false);
       }
     });
 
     return () => unsubscribe();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
   // Effect to refresh user state periodically when waiting for verification
   useEffect(() => {
@@ -476,219 +513,190 @@ export default function Home() {
   };
 
   // Update the handleUsernameChange function
-  const handleUsernameChange = (e) => {
-    const value = e.target.value.trim().toLowerCase();
-    setUsername(value);
+  // const handleUsernameChange = (e) => {
+  //   const value = e.target.value.trim().toLowerCase();
+  //   setUsername(value);
 
-    // Set checking state immediately when typing
+  //   // Set checking state immediately when typing
+  //   setIsCheckingUsername(true);
+
+  //   // Basic validation
+  //   if (value.length < 3) {
+  //     setUsernameError('Username must be at least 3 characters');
+  //     setIsCheckingUsername(false); // No need to check if too short
+  //   } else if (!/^[a-zA-Z0-9_.-]+$/.test(value)) {
+  //     setUsernameError('Only letters, numbers, underscore, dots, and hyphens allowed');
+  //     setIsCheckingUsername(false); // No need to check if invalid chars
+  //   } else {
+  //     // Only update debouncedUsername if the input is potentially valid
+  //     // This will trigger the useEffect above with a delay
+  //     setTimeout(() => {
+  //       setDebouncedUsername(value);
+  //     }, 400); // Add a small delay before updating debouncedUsername
+  //   }
+  // };
+
+  const handleUsernameChange = (e) => {
+    // Get raw value and sanitize it
+    const rawValue = e.target.value;
+    const value = sanitizeUsername(rawValue.trim().toLowerCase());
+
+    // Update immediately if different (prevents weird states)
+    if (value !== rawValue) {
+      e.target.value = value;
+    }
+
+    setUsername(value);
     setIsCheckingUsername(true);
 
     // Basic validation
     if (value.length < 3) {
       setUsernameError('Username must be at least 3 characters');
-      setIsCheckingUsername(false); // No need to check if too short
+      setIsCheckingUsername(false);
     } else if (!/^[a-zA-Z0-9_.-]+$/.test(value)) {
       setUsernameError('Only letters, numbers, underscore, dots, and hyphens allowed');
-      setIsCheckingUsername(false); // No need to check if invalid chars
+      setIsCheckingUsername(false);
     } else {
-      // Only update debouncedUsername if the input is potentially valid
-      // This will trigger the useEffect above with a delay
-      setTimeout(() => {
+      // Only update debouncedUsername for potentially valid usernames
+      // This prevents unnecessary Firestore queries
+      clearTimeout(window.usernameDebounceTimer);
+      window.usernameDebounceTimer = setTimeout(() => {
         setDebouncedUsername(value);
-      }, 400); // Add a small delay before updating debouncedUsername
+      }, 400);
     }
   };
 
-  // Handle registration form submission
-  const handleRegistration = async (e) => {
-    e.preventDefault();
+  // const handleProfileSetup = async (e) => {
+  //   e.preventDefault();
 
-    // Basic validation
-    if (!passwordsMatch || passwordStrength < 3) {
-      setError('Please ensure your password is strong and matches the confirmation');
-      return;
-    }
+  //   if (!user) {
+  //     setError("You need to be signed in to complete profile setup");
+  //     return;
+  //   }
 
-    // Check if the email is a university email
-    if (!isValidUniversityEmail(email)) {
-      setError('Please use your university email address, not a common email provider.');
-      return;
-    }
+  //   // Validate username only
+  //   if (username.length < 3) {
+  //     setError('Username must be at least 3 characters long');
+  //     return;
+  //   }
 
-    setLoading(true);
-    setError(null);
+  //   if (usernameError) {
+  //     setError(`Username issue: ${usernameError}`);
+  //     return;
+  //   }
 
-    try {
-      // Create the user auth account with only email and password
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const newUser = userCredential.user;
+  //   setLoading(true);
+  //   setError(null);
 
-      // Send verification email FIRST
-      try {
-        await sendEmailVerification(newUser);
-        console.log("Verification email sent successfully");
-      } catch (emailErr) {
-        console.error("Error sending verification email:", emailErr);
-        setError("Account created but there was a problem sending the verification email. Please try signing in and requesting a new verification email.");
-      }
+  //   try {
+  //     // Check username availability one last time
+  //     const usernameDoc = await getDoc(doc(db, 'usernames', username));
+  //     if (usernameDoc.exists()) {
+  //       setError('This username was just taken by someone else. Please choose another.');
+  //       setLoading(false);
+  //       return;
+  //     }
 
-      // Set user state and move to verification step
-      setUser(newUser);
-      setRegistrationStep('verifying');
+  //     // Get normalized email
+  //     const userEmail = user.email.toLowerCase().trim();
+  //     console.log("Using auth email:", userEmail);
 
-    } catch (err) {
-      console.error("Registration error:", err);
+  //     // Check if the user profile already exists (we're just adding the username)
+  //     const userProfiles = await getDocs(
+  //       query(collection(db, 'user_profiles'), where('email', '==', userEmail), limit(1))
+  //     );
 
-      if (err.code === 'auth/email-already-in-use') {
-        try {
-          // Try to sign in with the provided credentials
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          const existingUser = userCredential.user;
-          setUser(existingUser);
+  //     let profileId;
+  //     const batch = writeBatch(db);
 
-          if (existingUser.emailVerified) {
-            // Check if user has completed profile setup
-            const userDoc = await getDoc(doc(db, 'users', existingUser.uid));
+  //     if (!userProfiles.empty) {
+  //       // User profile exists - UPDATE instead of CREATE
+  //       const profileDoc = userProfiles.docs[0];
+  //       profileId = profileDoc.id;
+  //       console.log("Found existing profile - adding username to it:", profileId);
 
-            if (userDoc.exists()) {
-              // User has completed profile setup
-              const userData = userDoc.data();
-              setUsername(userData.username || '');
-              setName(userData.name || '');
-              setUniversity(userData.university || '');
+  //       // Update the existing profile with the username
+  //       batch.update(doc(db, 'user_profiles', profileId), {
+  //         username: username,
+  //         updatedAt: new Date().toISOString()
+  //       });
+  //     } else {
+  //       // Profile doesn't exist - CREATE a new one
+  //       console.log("No existing profile found - creating new one");
 
-              // Set payment status from Firestore
-              if (userData.paymentStatus) {
-                setPaymentStatus(userData.paymentStatus);
-              }
-              setRegistrationStep('payment');
-            } else {
-              // User is verified but hasn't set up profile yet
-              setRegistrationStep('profile-setup');
-            }
-          } else {
-            // Email exists but not verified
-            await sendEmailVerification(existingUser);
-            setRegistrationStep('verifying');
-          }
-        } catch (signInErr) {
-          // Wrong password for existing account
-          setError('This email is already registered. Please use the correct password.');
-          setShowLoginForm(true);
-          setLoginEmail(email);
-        }
-      } else if (err.code === 'auth/invalid-email') {
-        setError('Please enter a valid email address');
-      } else if (err.code === 'auth/weak-password') {
-        setError('Password is too weak. Please follow the password requirements.');
-      } else {
-        setError(`Registration failed: ${err.message}`);
-      }
-    }
+  //       // Create profile data
+  //       const profileData = {
+  //         email: userEmail,
+  //         username: username,
+  //         registrationCompleted: true,
+  //         createdAt: new Date().toISOString(),
+  //         updatedAt: new Date().toISOString()
+  //       };
 
-    setLoading(false);
-  };
+  //       // Create a new profile document with auto ID
+  //       const profileRef = doc(collection(db, 'user_profiles'));
+  //       profileId = profileRef.id;
+  //       batch.set(profileRef, profileData);
+  //     }
 
+  //     // Then create the username document linking to the profile
+  //     const usernameRef = doc(db, 'usernames', username);
+  //     batch.set(usernameRef, {
+  //       email: userEmail,
+  //       profileId: profileId,
+  //       createdAt: new Date().toISOString()
+  //     });
 
+  //     // Ensure the email is approved
+  //     batch.set(doc(db, 'approved_emails', userEmail), {
+  //       registered: true,
+  //       timestamp: new Date().toISOString()
+  //     }, { merge: true });
 
-  // Resend verification email
-  const handleResendVerification = async () => {
-    setLoading(true);
-    setError(null); // Clear previous errors
+  //     // Commit all changes
+  //     await batch.commit();
+  //     console.log("Profile setup complete with ID:", profileId);
 
-    try {
-      if (user) {
-        // Make sure the user object is fresh
-        await user.reload();
+  //     // Store in localStorage
+  //     localStorage.setItem('userUsername', username);
+  //     localStorage.setItem('userProfileId', profileId);
+  //     localStorage.setItem('registrationComplete', 'true');
 
-        // Check if already verified to avoid unnecessary attempts
-        if (auth.currentUser.emailVerified) {
-          setRegistrationStep('payment');
-          setLoading(false);
-          return;
-        }
+  //     // Success!
+  //     setRegistrationStep('success');
+  //     setIsFirstLogin(false);
+  //     setSuccess("Username has been set successfully!");
 
-        // Send verification email
-        await sendEmailVerification(auth.currentUser);
-        setError('Verification email sent! Please check your inbox and spam folder.');
-      } else {
-        setError('You need to be logged in to resend the verification email');
-      }
-    } catch (err) {
-      console.error("Error resending verification:", err);
+  //   } catch (err) {
+  //     console.error("Error setting up profile:", err);
+  //     setError(`Failed to complete setup: ${err.message}`);
+  //   }
 
-      // Provide better error messages
-      if (err.code === 'auth/too-many-requests') {
-        setError('Too many requests. Please wait before requesting another verification email.');
-      } else if (err.code === 'auth/internal-error') {
-        setError('Unable to send verification email due to a server error. Please try again later.');
-      } else {
-        setError(`Failed to send verification email: ${err.message}`);
-      }
-    }
+  //   setLoading(false);
+  // };
 
-    setLoading(false);
-  };
-
-  // Handle payment submission without Firebase Storage
-  const handlePaymentSubmission = async (e) => {
-    e.preventDefault();
-
-    if (!user) return;
-
-    setLoading(true);
-    setPaymentError(null);
-
-    try {
-      let screenshotData = null;
-      if (paymentDetails.screenshot && paymentDetails.screenshot.file) {
-        // Convert screenshot to base64 string (works for small files)
-        const reader = new FileReader();
-
-        // Create a promise to handle the async FileReader
-        const getBase64 = new Promise((resolve) => {
-          reader.onload = () => resolve(reader.result);
-          reader.readAsDataURL(paymentDetails.screenshot.file);
-        });
-
-        screenshotData = await getBase64;
-      }
-
-      // Update user document with payment details
-      await setDoc(doc(db, 'users', user.uid), {
-        paymentStatus: 'pending', // Always start with pending
-        paymentDetails: {
-          transactionId: paymentDetails.transactionId,
-          remarks: paymentDetails.remarks,
-          screenshotName: paymentDetails.screenshot ? paymentDetails.screenshot.name : null,
-          screenshotData: screenshotData, // Store base64 data directly in Firestore
-          submittedAt: new Date().toISOString()
-        }
-      }, { merge: true });
-
-      // Update local state
-      setPaymentStatus('pending');
-      setPaymentSuccess(true); // This is crucial - marks that they've submitted payment
-    } catch (err) {
-      console.error(err);
-      setPaymentError(`Failed to submit payment details: ${err.message}`);
-    }
-
-    setLoading(false);
-  };
-
+  // Replace your handleProfileSetup function with this enhanced version
   const handleProfileSetup = async (e) => {
     e.preventDefault();
 
     if (!user) {
-      setError("You need to be signed in to complete registration");
+      setError("You need to be signed in to complete profile setup");
       return;
     }
 
-    // Ensure the user's email is verified before proceeding
-    if (!user.emailVerified) {
-      setError("Your email must be verified before completing registration");
-      setRegistrationStep('verifying');
+    // Sanitize and validate username
+    const sanitizedUsername = sanitizeUsername(username.trim().toLowerCase());
+    if (sanitizedUsername !== username) {
+      setUsername(sanitizedUsername);
+    }
+
+    if (sanitizedUsername.length < 3) {
+      setError('Username must be at least 3 characters long');
+      return;
+    }
+
+    if (usernameError) {
+      setError(`Username issue: ${usernameError}`);
       return;
     }
 
@@ -696,61 +704,118 @@ export default function Home() {
     setError(null);
 
     try {
+      // Check for tampering with client-side validation
+      if (!/^[a-zA-Z0-9_.-]+$/.test(sanitizedUsername)) {
+        throw new Error('Invalid username format');
+      }
+
       // Check username availability one last time
-      if (username.length < 3) {
-        setError('Username must be at least 3 characters long');
-        setLoading(false);
-        return;
-      }
-
-      if (usernameError) {
-        setError(`Username issue: ${usernameError}`);
-        setLoading(false);
-        return;
-      }
-
-      // Verify username is available
-      const usernameDoc = await getDoc(doc(db, 'usernames', username));
+      const usernameDoc = await getDoc(doc(db, 'usernames', sanitizedUsername));
       if (usernameDoc.exists()) {
         setError('This username was just taken by someone else. Please choose another.');
         setLoading(false);
         return;
       }
 
-      // Create user document in Firestore
-      const userData = {
-        name,
-        email: user.email,
-        username,
-        university,
-        universityName: university === 'other' ? universityName : 'Mahindra University',
-        emailVerified: true,
-        createdAt: new Date().toISOString(),
-        paymentStatus: 'pending',
-        paymentRequired: university === 'other'
-      };
+      // Get normalized email
+      const userEmail = normalizeEmail(user.email);
+      console.log("Using auth email:", userEmail);
 
-      // Use a batch write to ensure both documents are created atomically
-      const batch = writeBatch(db);
+      // Add a transaction for atomicity
+      const userProfiles = await getDocs(
+        query(collection(db, 'user_profiles'), where('email', '==', userEmail), limit(1))
+      );
 
-      // Add the user document
-      const userRef = doc(db, 'users', user.uid);
-      batch.set(userRef, userData);
+      let profileId;
+      let batch = writeBatch(db);
 
-      // Reserve the username
-      const usernameRef = doc(db, 'usernames', username);
-      batch.set(usernameRef, { uid: user.uid });
+      // Check if too many profiles exist for this email (security check)
+      const allUserProfiles = await getDocs(
+        query(collection(db, 'user_profiles'), where('email', '==', userEmail))
+      );
 
-      // Commit both writes in a single atomic operation
-      await batch.commit();
+      if (allUserProfiles.size > 3) {
+        throw new Error('Too many profiles associated with this email. Please contact support.');
+      }
 
-      console.log("User profile created successfully");
+      if (!userProfiles.empty) {
+        // Existing profile - UPDATE instead of CREATE
+        const profileDoc = userProfiles.docs[0];
+        profileId = profileDoc.id;
+        console.log("Found existing profile - adding username to it:", profileId);
 
-      // Move to payment step
-      setRegistrationStep('payment');
+        // Don't use batch for this first operation
+        try {
+          await setDoc(doc(db, 'user_profiles', profileId), {
+            username: sanitizedUsername,
+            updatedAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString()
+          }, { merge: true });
+          console.log("Updated existing profile with username");
+        } catch (updateError) {
+          console.error("Error updating profile:", updateError);
+          throw updateError;
+        }
+      } else {
+        // No profile - CREATE new one
+        console.log("No existing profile found - creating new one");
+
+        // Profile data
+        const profileData = {
+          email: userEmail,
+          username: sanitizedUsername,
+          registrationCompleted: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString()
+        };
+
+        try {
+          // Create with separate operation
+          const profileRef = await addDoc(collection(db, 'user_profiles'), profileData);
+          profileId = profileRef.id;
+          console.log("Created new profile with ID:", profileId);
+        } catch (createError) {
+          console.error("Error creating profile:", createError);
+          throw createError;
+        }
+      }
+
+      // Create username separately
+      try {
+        await setDoc(doc(db, 'usernames', sanitizedUsername), {
+          email: userEmail,
+          profileId: profileId,
+          createdAt: new Date().toISOString()
+        });
+        console.log("Username document created");
+      } catch (usernameError) {
+        console.error("Error creating username document:", usernameError);
+        throw usernameError;
+      }
+
+      // Store securely in localStorage
+      localStorage.setItem('userUsername', sanitizedUsername);
+      localStorage.setItem('userProfileId', profileId);
+      localStorage.setItem('registrationComplete', 'true');
+
+      // Clear any stored attempt counters
+      localStorage.removeItem('loginAttempts');
+      localStorage.removeItem('resetAttempts');
+
+      // Success!
+      setRegistrationStep('success');
+      setIsFirstLogin(false);
+      setSuccess("Username has been set successfully!");
+
     } catch (err) {
       console.error("Error setting up profile:", err);
-      setError(`Failed to complete profile setup: ${err.message}`);
+
+      if (err.code === 'permission-denied') {
+        setError("Permission denied. Please check your account permissions.");
+      } else {
+        setError(`Failed to complete setup: ${err.message}`);
+      }
     }
 
     setLoading(false);
@@ -802,87 +867,30 @@ export default function Home() {
   }, [registrationStep, user]);
 
   // Modified screenshot handler - just store file metadata for now
-  const handleScreenshotChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Make sure the file size is reasonable (< 1MB) since we're storing in Firestore
-      if (file.size > 1024 * 1024) {
-        setPaymentError("Screenshot is too large. Please upload an image smaller than 1MB.");
-        return;
-      }
+  // const handleScreenshotChange = (e) => {
+  //   const file = e.target.files[0];
+  //   if (file) {
+  //     // Make sure the file size is reasonable (< 1MB) since we're storing in Firestore
+  //     if (file.size > 1024 * 1024) {
+  //       setPaymentError("Screenshot is too large. Please upload an image smaller than 1MB.");
+  //       return;
+  //     }
 
-      // Store file metadata and the file itself
-      setPaymentDetails({
-        ...paymentDetails,
-        screenshot: {
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          file: file // Store the actual file for later base64 conversion
-        }
-      });
-    }
-  };
+  //     // Store file metadata and the file itself
+  //     setPaymentDetails({
+  //       ...paymentDetails,
+  //       screenshot: {
+  //         name: file.name,
+  //         type: file.type,
+  //         size: file.size,
+  //         file: file // Store the actual file for later base64 conversion
+  //       }
+  //     });
+  //   }
+  // };
 
   return (
     <div className="min-h-screen flex flex-col relative">
-      <PageLoader />
-      {/* <div className="fixed inset-0 bg-gradient-to-br from-[#000016] to-[#01003D] z-0" /> */}
-      <div className="fixed inset-0 z-0">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute w-full h-full object-cover opacity-80"
-        >
-          <source src="/bgfinal.mp4" type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-black/10"></div> {/* Overlay to darken the video */}
-      </div>
-
-      {/* Navbar */}
-      <nav className="relative z-10 w-full pt-10 px-10 md:px-15">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          {/* Logo */}
-          <div className="flex-shrink-0">
-            <Link href="/">
-              <Image
-                src="/logo.png"
-                alt="MCSE Logo"
-                width={100}
-                height={100}
-                className="object-contain cursor-pointer"
-              />
-            </Link>
-          </div>
-
-          {/* Desktop Navigation Links */}
-          <div className={`hidden md:flex items-center space-x-8 ${crimson.className}`}>
-            <Link href="#about" className="text-white hover:text-blue-300 transition-colors text-2xl">
-              About
-            </Link>
-            <Link href="#how-to" className="text-white hover:text-blue-300 transition-colors text-2xl">
-              How to
-            </Link>
-            <Link href="#register">
-              <button className="px-5 py-2 bg-blue-950/80 hover:bg-blue-900 text-white rounded-lg transition-colors text-2xl">
-                Register
-              </button>
-            </Link>
-          </div>
-
-          {/* Mobile - Only Register Button */}
-          <div className="md:hidden flex">
-            <Link href="#register">
-              <button className={`px-5 py-2 bg-blue-950/80 hover:bg-blue-900 text-white rounded-lg transition-colors text-xl ${crimson.className}`}>
-                Register
-              </button>
-            </Link>
-          </div>
-        </div>
-      </nav>
-
       {/* Main content - Hero Section */}
       <section className="min-h-[70vh] flex items-center justify-center z-10">
         <div className="max-w-4xl px-4 sm:px-10 md:px-15">
@@ -939,49 +947,60 @@ export default function Home() {
 
               {/* Timeline Design */}
               <div className="relative pt-2 pb-1">
-                {/* Vertical line */}
+
                 <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-0.5 bg-blue-500/30"></div>
 
-                {/* Timeline items */}
-                <div className={`${inter.variable} font-inter`}>
+
+                <div className={`${inter.variable} font-inter text-sm`}>
                   {/* Item 1 */}
-                  <div className="relative flex items-center justify-between mb-10">
-                    <div className="w-5/12 pr-4 text-right">
+                  <div className="relative flex items-center justify-between mb-4">
+                    <div className="w-5/12 pr-2 text-right">
                       <p className="font-medium text-white">Registration opens</p>
                     </div>
                     <div className="absolute left-1/2 transform -translate-x-1/2 z-10">
                       {/* Fix the pulsing animation to be properly centered */}
                       <div className="relative flex items-center justify-center">
                         {/* Centered pulsing circle with proper positioning */}
-                        <div className="absolute w-6 h-6 rounded-full bg-green-500/30 animate-ping"></div>
+                        <div className="absolute w-4 h-4 rounded-full bg-green-500/30 animate-ping"></div>
                         {/* Static inner circle centered inside */}
-                        <div className="relative w-4 h-4 rounded-full bg-green-500 border-2 border-green-300"></div>
+                        <div className="relative w-3 h-3 rounded-full bg-green-500 border-2 border-green-300"></div>
                       </div>
                     </div>
-                    <div className="w-5/12 pl-4 text-left">
-                      <p className="text-white/70">September 1, 2023</p>
+                    <div className="w-5/12 pl-2 text-left">
+                      <p className="text-white/70">March 24</p>
                     </div>
                   </div>
 
                   {/* Item 2 */}
-                  <div className="relative flex items-center justify-between mb-10">
-                    <div className="w-5/12 pr-4 text-right">
-                      <p className="font-medium text-white">Competition begins</p>
+                  <div className="relative flex items-center justify-between mb-4">
+                    <div className="w-5/12 pr-2 text-right">
+                      <p className="font-medium text-white">IPO Listing</p>
                     </div>
-                    <div className="absolute left-1/2 transform -translate-x-1/2 w-4 h-4 rounded-full bg-blue-500 border-2 border-blue-300 z-10"></div>
-                    <div className="w-5/12 pl-4 text-left">
-                      <p className="text-white/70">September 15, 2023</p>
+                    <div className="absolute left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300 z-10"></div>
+                    <div className="w-5/12 pl-2 text-left">
+                      <p className="text-white/70">April 1</p>
                     </div>
                   </div>
 
                   {/* Item 3 */}
-                  <div className="relative flex items-center justify-between">
-                    <div className="w-5/12 pr-4 text-right">
-                      <p className="font-medium text-white">Final results</p>
+                  <div className="relative flex items-center justify-between mb-4">
+                    <div className="w-5/12 pr-2 text-right">
+                      <p className="font-medium text-white">IPO Allotment, Market Opens</p>
                     </div>
-                    <div className="absolute left-1/2 transform -translate-x-1/2 w-4 h-4 rounded-full bg-blue-500 border-2 border-blue-300 z-10"></div>
-                    <div className="w-5/12 pl-4 text-left">
-                      <p className="text-white/70">November 30, 2023</p>
+                    <div className="absolute left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300 z-10"></div>
+                    <div className="w-5/12 pl-2 text-left">
+                      <p className="text-white/70">April 4</p>
+                    </div>
+                  </div>
+
+                  {/* Item 4 */}
+                  <div className="relative flex items-center justify-between">
+                    <div className="w-5/12 pr-2 text-right">
+                      <p className="font-medium text-white">Closing Ceremony</p>
+                    </div>
+                    <div className="absolute left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300 z-10"></div>
+                    <div className="w-5/12 pl-2 text-left">
+                      <p className="text-white/70">April 6</p>
                     </div>
                   </div>
                 </div>
@@ -1056,43 +1075,25 @@ export default function Home() {
               </div>
             )}
 
-            {/* Login/Register Chooser */}
-            {registrationStep === 'form' && (
-              <div className="mb-8">
-                <div className="flex border-b border-white/20 mb-6">
-                  <button
-                    onClick={() => setShowLoginForm(false)}
-                    className={`py-3 px-6 font-medium text-lg transition-all relative ${!showLoginForm
-                      ? "text-white"
-                      : "text-white/50 hover:text-white/70"
-                      }`}
-                  >
-                    Register
-                    {!showLoginForm && (
-                      <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-400"></span>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => setShowLoginForm(true)}
-                    className={`py-3 px-6 font-medium text-lg transition-all relative ${showLoginForm
-                      ? "text-white"
-                      : "text-white/50 hover:text-white/70"
-                      }`}
-                  >
-                    Sign In
-                    {showLoginForm && (
-                      <span className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-400"></span>
-                    )}
-                  </button>
-                </div>
+            {/* Success Message */}
+            {success && (
+              <div className="bg-green-500/20 border border-green-500/40 text-white p-4 rounded-lg mb-6">
+                {success}
               </div>
             )}
 
             {/* Login Form */}
-            {registrationStep === 'form' && showLoginForm && (
+            {registrationStep === 'login' && (
               <form className={`${inter.variable} font-inter animate-fadeIn`} onSubmit={handleLoginSubmit}>
-                {/* Your existing login form fields */}
+                <div className="mb-8 text-center">
+                  <h2 className={`text-2xl text-white font-semibold ${crimson.className}`}>
+                    Sign In to MCSE
+                  </h2>
+                  <p className="text-white/60 mt-2">
+                    If you have already registered, your account will be processed within one hour at most.
+                  </p>
+                </div>
+
                 <div className="space-y-6">
                   {/* Email field */}
                   <div>
@@ -1102,7 +1103,7 @@ export default function Home() {
                     <input
                       type="email"
                       id="loginEmail"
-                      placeholder="123@university.edu.in"
+                      placeholder="your.email@example.com"
                       className="w-full bg-slate-800/40 border border-white/20 rounded-md py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
                       required
                       value={loginEmail}
@@ -1126,12 +1127,11 @@ export default function Home() {
                     />
                   </div>
 
-                  {/* Submit button */}
-                  <div className="pt-2 flex gap-10">
+                  {/* Submit and Reset Password buttons */}
+                  <div className="pt-2 flex flex-col md:flex-row md:justify-between items-center">
                     <button
                       type="submit"
-                      className={`w-full md:w-auto px-9 py-3 bg-blue-950/60 ${crimson.className} hover:bg-blue-900 text-white rounded-lg transition-all text-xl font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg focus:ring-2 focus:ring-blue-900/50'
-                        }`}
+                      className={`w-full md:w-auto px-9 py-3 bg-blue-950/60 ${crimson.className} hover:bg-blue-900 text-white rounded-lg transition-all text-xl font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg focus:ring-2 focus:ring-blue-900/50'}`}
                       disabled={loading}
                     >
                       {loading ? (
@@ -1144,16 +1144,16 @@ export default function Home() {
                         </span>
                       ) : 'Sign In'}
                     </button>
-                    <div className="text-center mt-4">
+
+                    <div className="text-center mt-4 md:mt-0">
                       <button
                         type="button"
                         onClick={handlePasswordReset}
-                        className={`text-blue-300 hover:text-blue-200 text-lg ${crimson.className}${loading || resetEmailSent ? 'opacity-50 cursor-not-allowed' : ''
-                          }`}
+                        className={`text-blue-300 hover:text-blue-200 text-lg ${crimson.className} ${loading || resetEmailSent ? 'opacity-50 cursor-not-allowed' : ''}`}
                         disabled={loading || resetEmailSent}
                       >
                         {loading && !resetEmailSent ? (
-                          <span className="flex items-center">
+                          <span className="flex items-center justify-center">
                             <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-blue-300" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -1165,160 +1165,24 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-              </form>
-            )}
 
-            {registrationStep === 'form' && !showLoginForm && (
-              <form className={`${inter.variable} font-inter animate-fadeIn `} onSubmit={handleRegistration}>
-                <div className="space-y-6">
-                  {/* Email Field */}
-                  <div>
-                    <label htmlFor="email" className={`block text-white text-lg font-medium mb-2 ${crimson.className} font-crimson`}>
-                      Email (Only University mail)
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="email"
-                        id="email"
-                        placeholder="123@university.edu.in"
-                        className="w-full bg-slate-800/40 border border-white/20 rounded-md py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                      />
-                    </div>
-                    {email && !isValidUniversityEmail(email) && (
-                      <p className="mt-1 text-xs text-red-400">Please use your university email address, not a common email provider.</p>
-                    )}
-                  </div>
-
-                  {/* Password Field */}
-                  <div>
-                    <label htmlFor="password" className={`block text-white text-lg font-medium mb-2 ${crimson.className} font-crimson`}>
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="password"
-                        id="password"
-                        placeholder="Create a strong password"
-                        className="w-full bg-slate-800/40 border border-white/20 rounded-md py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
-                        required
-                        value={password}
-                        onChange={handlePasswordChange}
-                        minLength={8}
-                      />
-                    </div>
-
-                    {/* Password Strength Indicator */}
-                    <div className="mt-3">
-                      <div className="h-1.5 w-full bg-gray-700/40 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${passwordStrength === 0
-                            ? "bg-gray-600 w-0"
-                            : passwordStrength === 1
-                              ? "bg-red-500 w-1/4"
-                              : passwordStrength === 2
-                                ? "bg-yellow-500 w-2/4"
-                                : passwordStrength === 3
-                                  ? "bg-yellow-300 w-3/4"
-                                  : "bg-green-500 w-full"
-                            }`}
-                        ></div>
-                      </div>
-                      <p className="text-xs text-white/60 mt-1.5 ml-1">
-                        {passwordStrength === 0
-                          ? "Strength Indicator"
-                          : passwordStrength === 1
-                            ? "Weak"
-                            : passwordStrength === 2
-                              ? "Fair"
-                              : passwordStrength === 3
-                                ? "Good"
-                                : "Strong"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Confirm Password Field */}
-                  <div>
-                    <label htmlFor="confirmPassword" className={`block text-white text-lg font-medium mb-2 ${crimson.className} font-crimson`}>
-                      Confirm Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="password"
-                        id="confirmPassword"
-                        placeholder="Re-enter your password"
-                        className={`w-full bg-slate-800/40 border rounded-md py-3 px-4 text-white focus:outline-none focus:ring-2 focus:border-transparent transition-all ${confirmPassword && !passwordsMatch
-                          ? "border-red-500 focus:ring-red-500/50"
-                          : "border-white/20 focus:ring-blue-500/50"
-                          }`}
-                        required
-                        value={confirmPassword}
-                        onChange={handleConfirmPasswordChange}
-                      />
-                    </div>
-                    {confirmPassword && !passwordsMatch && (
-                      <p className="mt-1.5 ml-1 text-xs text-red-400">Passwords do not match</p>
-                    )}
-                  </div>
-
-                  {/* Password Requirements */}
-                  <div className="text-white/70 text-sm bg-slate-900/30 p-4 rounded-md border border-white/10 mt-2">
-                    <p className="mb-3 font-medium text-white/80">Password requirements:</p>
-                    <ul className="space-y-2">
-                      <li className="flex items-center">
-                        <span className={`flex items-center ${password.length >= 8 ? "text-green-400" : "text-white/50"}`}>
-                          {password.length >= 8 ? <Check size={16} className="mr-2" /> : <X size={16} className="mr-2" />}
-                          At least 8 characters
-                        </span>
-                      </li>
-                      <li className="flex items-center">
-                        <span className={`flex items-center ${/[A-Z]/.test(password) && /[a-z]/.test(password) ? "text-green-400" : "text-white/50"}`}>
-                          {/[A-Z]/.test(password) && /[a-z]/.test(password) ? <Check size={16} className="mr-2" /> : <X size={16} className="mr-2" />}
-                          Upper & lowercase letters
-                        </span>
-                      </li>
-                      <li className="flex items-center">
-                        <span className={`flex items-center ${/[0-9]/.test(password) ? "text-green-400" : "text-white/50"}`}>
-                          {/[0-9]/.test(password) ? <Check size={16} className="mr-2" /> : <X size={16} className="mr-2" />}
-                          At least one number
-                        </span>
-                      </li>
-                      <li className="flex items-center">
-                        <span className={`flex items-center ${/[^A-Za-z0-9]/.test(password) ? "text-green-400" : "text-white/50"}`}>
-                          {/[^A-Za-z0-9]/.test(password) ? <Check size={16} className="mr-2" /> : <X size={16} className="mr-2" />}
-                          At least one special character
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  {/* Submit Button */}
-                  <div className="mt-10">
-                    <button
-                      type="submit"
-                      className={`w-full md:w-auto px-9 py-3 bg-blue-950/60 ${crimson.className} text-white rounded-lg transition-all text-xl font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-900 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-900/50'
-                        }`}
-                      disabled={loading || !isValidUniversityEmail(email) || !passwordsMatch || passwordStrength < 3}
+                <div className="mt-8 pt-6 border-t border-white/10">
+                  <p className="text-white/50 text-sm text-center">
+                    Don't have an account? Please contact administrator or visit
+                    <a
+                      href="https://unifest.in/fests/52?tab=competition&search=The%20Math%20Club%20Stock%20Exchange"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 ml-1"
                     >
-                      {loading ? (
-                        <span className="flex items-center justify-center">
-                          <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Verifying Email...
-                        </span>
-                      ) : 'Verify Email'}
-                    </button>
-                  </div>
+                      the registration site
+                    </a>.
+                  </p>
                 </div>
               </form>
             )}
 
-            {/* New Profile Setup Step - Only shown after email verification */}
+            {/* Profile Setup Form - Username only */}
             {registrationStep === 'profile-setup' && (
               <div className="py-8 relative">
                 <div className="absolute top-0 right-0">
@@ -1333,141 +1197,79 @@ export default function Home() {
                   </button>
                 </div>
 
-                <div className="mb-6 text-center">
-                  <div className="w-20 h-20 mx-auto bg-green-500/20 rounded-full flex items-center justify-center mb-4">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <div className="mb-8 text-center">
+                  <div className="w-20 h-20 mx-auto bg-blue-500/20 rounded-full flex items-center justify-center mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                   </div>
-                  <h3 className={`text-2xl text-white font-semibold mb-2 ${crimson.className}`}>Email Verified!</h3>
-                  <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                    Complete your profile to finish registration
+                  <h3 className={`text-2xl text-white font-semibold mb-2 ${crimson.className}`}>Choose a Username</h3>
+                  <p className={`text-white/80 ${inter.variable} font-inter mb-2`}>
+                    Select a unique username for your MCSE account
+                  </p>
+                  <p className={`text-white/60 ${inter.variable} font-inter text-sm mb-6`}>
+                    Welcome, {user?.email}!
                   </p>
                 </div>
 
-                <form className={`${inter.variable} font-inter`} onSubmit={handleProfileSetup}>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                    {/* Name Field */}
-                    <div>
-                      <label htmlFor="name" className={`block text-white text-lg font-medium mb-2 ${crimson.className}`}>
-                        Name
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          id="name"
-                          placeholder="Your full name"
-                          className="w-full bg-slate-800/40 border border-white/20 rounded-md py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
-                          required
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Username Field */}
-                    <div>
-                      <label htmlFor="username" className={`block text-white text-lg font-medium mb-2 ${crimson.className}`}>
-                        Username
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          id="username"
-                          placeholder="Choose a username"
-                          className={`w-full bg-slate-800/40 border rounded-md py-3 px-4 text-white pr-10 focus:outline-none focus:ring-2 focus:border-transparent transition-all ${isCheckingUsername
-                            ? "border-yellow-500/50 focus:ring-yellow-500/30"
-                            : usernameError
-                              ? "border-red-500/50 focus:ring-red-500/30"
-                              : username.length >= 3
-                                ? "border-green-500/50 focus:ring-green-500/30"
-                                : "border-white/20 focus:ring-blue-500/50"
-                            }`}
-                          required
-                          value={username}
-                          onChange={handleUsernameChange}
-                          autoComplete="off"
-                        />
-                        {/* Status icon */}
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          {isCheckingUsername ? (
-                            <svg className="animate-spin h-5 w-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                          ) : usernameError ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                            </svg>
-                          ) : username.length >= 3 ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                          ) : null}
-                        </div>
-                      </div>
-                      {/* Username feedback */}
-                      {usernameError && (
-                        <p className="mt-1 text-xs text-red-400">{usernameError}</p>
-                      )}
-                      {!usernameError && username.length >= 3 && !isCheckingUsername && (
-                        <p className="mt-1 text-xs text-green-400">Username is available!</p>
-                      )}
-                    </div>
-
-                    {/* University Selection */}
-                    <div>
-                      <label htmlFor="university" className={`block text-white text-lg font-medium mb-2 ${crimson.className}`}>
-                        University
-                      </label>
-                      <div className="relative">
-                        <select
-                          id="university"
-                          className="w-full bg-slate-800/40 border border-white/20 rounded-md py-3 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all appearance-none"
-                          required
-                          value={university}
-                          onChange={handleUniversityChange}
-                        >
-                          <option value="" disabled>Select your university</option>
-                          <option value="mahindra-university">Mahindra University</option>
-                          <option value="other">Other University</option>
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-white">
-                          <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20">
-                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                <form className={`${inter.variable} font-inter max-w-md mx-auto`} onSubmit={handleProfileSetup}>
+                  {/* Username Field */}
+                  <div>
+                    <label htmlFor="username" className={`block text-white text-lg font-medium mb-2 ${crimson.className}`}>
+                      Username
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="username"
+                        placeholder="Choose a username"
+                        className={`w-full bg-slate-800/40 border rounded-md py-3 px-4 text-white pr-10 focus:outline-none focus:ring-2 focus:border-transparent transition-all ${isCheckingUsername
+                          ? "border-yellow-500/50 focus:ring-yellow-500/30"
+                          : usernameError
+                            ? "border-red-500/50 focus:ring-red-500/30"
+                            : username.length >= 3
+                              ? "border-green-500/50 focus:ring-green-500/30"
+                              : "border-white/20 focus:ring-blue-500/50"
+                          }`}
+                        required
+                        value={username}
+                        onChange={handleUsernameChange}
+                        autoComplete="off"
+                      />
+                      {/* Status icon */}
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {isCheckingUsername ? (
+                          <svg className="animate-spin h-5 w-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                        </div>
+                        ) : usernameError ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                        ) : username.length >= 3 ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                        ) : null}
                       </div>
-
-                      {university === 'other' && (
-                        <div className="mt-3">
-                          <label htmlFor="universityName" className={`block text-white text-sm font-medium mb-1 ${crimson.className}`}>
-                            Please specify your university
-                          </label>
-                          <input
-                            type="text"
-                            id="universityName"
-                            placeholder="Enter your university name"
-                            className="w-full bg-slate-800/40 border border-white/20 rounded-md py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
-                            required={university === 'other'}
-                            value={universityName}
-                            onChange={(e) => setUniversityName(e.target.value)}
-                          />
-                          <p className="mt-2 text-xs text-amber-300">
-                            Note: Registration for non-Mahindra University students requires a ₹25 fee.
-                          </p>
-                        </div>
-                      )}
                     </div>
+                    {/* Username feedback */}
+                    {usernameError && (
+                      <p className="mt-1 text-xs text-red-400">{usernameError}</p>
+                    )}
+                    {!usernameError && username.length >= 3 && !isCheckingUsername && (
+                      <p className="mt-1 text-xs text-green-400">Username is available!</p>
+                    )}
                   </div>
 
                   {/* Submit button */}
-                  <div className="mt-10">
+                  <div className="mt-8">
                     <button
                       type="submit"
-                      className={`w-full md:w-auto px-9 py-3 bg-blue-950/60 ${crimson.className} text-white rounded-lg transition-all text-xl font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-900 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-900/50'
+                      className={`w-full px-9 py-3 bg-blue-950/60 ${crimson.className} text-white rounded-lg transition-all text-xl font-medium shadow-md ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-900 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-900/50'
                         }`}
-                      disabled={loading || isCheckingUsername || usernameError || !name || !username || !university}
+                      disabled={loading || isCheckingUsername || usernameError || !username}
                     >
                       {loading ? (
                         <span className="flex items-center justify-center">
@@ -1475,17 +1277,17 @@ export default function Home() {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                          Completing Registration...
+                          Setting Up...
                         </span>
-                      ) : 'Complete Registration'}
+                      ) : 'Complete Setup'}
                     </button>
                   </div>
                 </form>
               </div>
             )}
 
-            {/* Email Verification Screen */}
-            {registrationStep === 'verifying' && (
+            {/* Success Screen */}
+            {registrationStep === 'success' && (
               <div className="text-center py-8 relative">
                 <div className="absolute top-0 right-0">
                   <button
@@ -1499,407 +1301,51 @@ export default function Home() {
                   </button>
                 </div>
                 <div className="mb-6">
-                  <div className="w-20 h-20 mx-auto bg-blue-500/20 rounded-full flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                </div>
-                <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>Verify your email</h3>
-                <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                  We&apos;ve sent a verification link to <span className="text-blue-300 font-medium">{user?.email}</span>.<br />
-                  Please check your inbox and click the link to verify your account.
-                </p>
-                <p className={`text-white/60 text-sm ${inter.variable} font-inter mb-8`}>
-                  This page will automatically update once your email is verified.<br />
-                  If you don&apos;t see the email, check your spam folder.
-                </p>
-
-                <div className="flex flex-col items-center justify-center space-y-4">
-                  <button
-                    onClick={handleResendVerification}
-                    className={`px-5 py-2 bg-blue-900/50 text-white rounded-lg transition-colors ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-800/50'
-                      }`}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <span className="flex items-center justify-center">
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Sending...
-                      </span>
-                    ) : 'Resend verification email'}
-                  </button>
-
-                  <div className="relative flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-300"></div>
-                    <span className="ml-2 text-white/70 text-sm">Waiting for verification...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Payment Form */}
-            {registrationStep === 'payment' && (
-              <>
-                <div className="text-center py-8 relative">
-                  <div className="absolute top-0 right-0">
-                    <button
-                      onClick={handleSignOut}
-                      className="flex items-center px-3 py-1.5 bg-transparent border border-white/20 text-white/60 rounded-md hover:bg-white/10 hover:text-white transition-all text-sm"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
-                      Sign out
-                    </button>
-                  </div>
-                  <h3 className={`text-2xl text-white font-semibold mb-2 ${crimson.className}`}>
-                    {university === 'other' ? 'Registration Payment' : 'Registration Successful!'}
-                  </h3>
-
-                  {university === 'mahindra-university' ? (
-                    <div className="py-8 text-center">
-                      <div className="w-20 h-20 mx-auto bg-green-500/20 rounded-full flex items-center justify-center mb-6">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <p className={`text-white ${inter.variable} font-inter mb-6`}>
-                        Your registration is complete! No payment required for Mahindra University students.
-                      </p>
-                      <p className={`text-white/70 ${inter.variable} font-inter`}>
-                        We&apos;ll send you more information about the competition soon.
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Non-Mahindra University Students Payment Flow */}
-                      {paymentStatus === 'pending' && paymentSuccess && (
-                        <div className="py-8 text-center">
-                          <div className="w-20 h-20 mx-auto bg-yellow-500/20 rounded-full flex items-center justify-center mb-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </div>
-                          <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>Payment Processing</h3>
-                          <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                            Thank you! Your payment details have been submitted and are being verified.
-                          </p>
-                          <p className={`text-white/60 text-sm ${inter.variable} font-inter`}>
-                            Once verified, you will receive a confirmation email. This usually takes 1-2 business days.
-                          </p>
-                        </div>
-                      )}
-
-                      {paymentStatus === 'failed' && (
-                        <div className="py-8 text-center">
-                          <div className="w-20 h-20 mx-auto bg-red-500/20 rounded-full flex items-center justify-center mb-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                          </div>
-                          <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>Payment Verification Failed</h3>
-                          <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                            We couldn&apos;t verify your payment. This could be due to:
-                          </p>
-                          <ul className="text-left max-w-md mx-auto mb-8 text-white/70 space-y-1">
-                            <li className="flex items-start">
-                              <span className="mr-2">•</span>
-                              <span>Invalid transaction ID</span>
-                            </li>
-                            <li className="flex items-start">
-                              <span className="mr-2">•</span>
-                              <span>Transaction amount didn&apos;t match the required payment</span>
-                            </li>
-                            <li className="flex items-start">
-                              <span className="mr-2">•</span>
-                              <span>Screenshot was unclear or didn&apos;t match the transaction ID</span>
-                            </li>
-                          </ul>
-                          <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                            Please submit your payment details again.
-                          </p>
-                          <button
-                            onClick={() => {
-                              setPaymentSuccess(false);
-                              setPaymentDetails({
-                                transactionId: '',
-                                remarks: '',
-                                screenshot: null
-                              });
-                            }}
-                            className="px-5 py-3 bg-blue-900 hover:bg-blue-800 text-white rounded-lg transition-colors"
-                          >
-                            Try Again
-                          </button>
-                        </div>
-                      )}
-
-                      {paymentStatus === 'success' && (
-                        <div className="py-8 text-center">
-                          <div className="w-20 h-20 mx-auto bg-green-500/20 rounded-full flex items-center justify-center mb-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          </div>
-                          <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>Payment Verified Successfully</h3>
-                          <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                            Great news! Your payment has been verified and your registration is now complete.
-                          </p>
-                          <p className={`text-white/60 text-sm ${inter.variable} font-inter`}>
-                            We&apos;ll send you more information about the competition soon.
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Show payment form only if not success AND not pending with submitted details */}
-                      {(paymentStatus !== 'success' && !paymentSuccess) && (
-                        <>
-                          <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                            Please complete your registration by paying the ₹25 fee
-                          </p>
-
-                          {paymentError && (
-                            <div className="bg-red-500/20 border border-red-500/40 text-white p-4 rounded-lg mb-6">
-                              {paymentError}
-                            </div>
-                          )}
-
-                          <div className="max-w-md mx-auto bg-slate-900/50 p-6 rounded-lg border border-white/10 mb-8">
-                            <div className="mb-6">
-                              <h4 className={`text-lg text-white font-medium mb-4 ${crimson.className}`}>Scan QR Code to Pay</h4>
-                              <Image
-                                src="/upi-qr.png"
-                                alt="UPI Payment QR Code"
-                                width={200}
-                                height={200}
-                                className="mx-auto"
-                              />
-                              <p className="text-sm text-white/70 mt-2">UPI ID: 9966707911@ptyes</p>
-                            </div>
-
-                            <form onSubmit={handlePaymentSubmission} className="space-y-4">
-                              <div className='flex flex-col items-start'>
-                                <label htmlFor="transactionId" className={`block text-white text-lg font-medium mb-2 ${crimson.className}`}>
-                                  Transaction ID/Reference Number
-                                </label>
-                                <input
-                                  type="text"
-                                  id="transactionId"
-                                  placeholder="e.g. 123456789012"
-                                  className="w-full bg-slate-800/40 border border-white/20 rounded-md py-2 px-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                                  required
-                                  value={paymentDetails.transactionId}
-                                  onChange={(e) => {
-                                    // Allow only digits and limit to 12 characters
-                                    const value = e.target.value.replace(/\D/g, '').slice(0, 12);
-                                    setPaymentDetails({ ...paymentDetails, transactionId: value });
-                                  }}
-                                />
-                                {/* <p className="text-xs text-white/50 mt-1">
-                                  Must be exactly 12 digits
-                                </p> */}
-                                {paymentDetails.transactionId && paymentDetails.transactionId.length !== 12 && (
-                                  <p className="text-xs text-red-400 mt-1">
-                                    Transaction ID must be exactly 12 digits
-                                  </p>
-                                )}
-                              </div>
-
-                              <div className='flex flex-col items-start'>
-                                <label htmlFor="screenshot" className={`block text-white text-lg font-medium mb-2 ${crimson.className}`}>
-                                  Upload Payment Screenshot (Required)
-                                </label>
-                                <input
-                                  type="file"
-                                  id="screenshot"
-                                  accept="image/*"
-                                  className="w-full bg-slate-800/80 border border-white/20 rounded-md py-2 px-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                                  onChange={handleScreenshotChange}
-                                  required
-                                />
-                                <p className="text-xs text-white/50 mt-1">
-                                  Max file size: 1MB
-                                </p>
-                              </div>
-
-                              <div className='flex flex-col items-start'>
-                                <label htmlFor="remarks" className={`block text-white text-lg font-medium mb-2 ${crimson.className}`}>
-                                  Remarks (Optional)
-                                </label>
-                                <textarea
-                                  id="remarks"
-                                  placeholder="Any additional information"
-                                  className="w-full bg-slate-800/40 border border-white/20 rounded-md py-2 px-3 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-                                  rows={3}
-                                  value={paymentDetails.remarks}
-                                  onChange={(e) => setPaymentDetails({ ...paymentDetails, remarks: e.target.value })}
-                                ></textarea>
-                              </div>
-
-                              <button
-                                type="submit"
-                                className={`w-full px-4 py-2 bg-blue-950/60 ${crimson.className} text-xl text-white rounded-md transition-colors ${loading || (paymentDetails.transactionId.length !== 12) || !paymentDetails.screenshot
-                                  ? 'opacity-50 cursor-not-allowed'
-                                  : 'hover:bg-blue-900'
-                                  }`}
-                                disabled={loading || paymentDetails.transactionId.length !== 12 || !paymentDetails.screenshot}
-                              >
-                                {loading ? (
-                                  <span className="flex items-center justify-center">
-                                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Submitting...
-                                  </span>
-                                ) : 'Submit Payment Details'}
-                              </button>
-                            </form>
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Payment Success */}
-            {paymentSuccess && (
-              <div className="text-center py-8">
-                <div className="mb-6">
                   <div className="w-20 h-20 mx-auto bg-green-500/20 rounded-full flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
                 </div>
-                <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>Payment Submitted Successfully</h3>
+                <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>Setup Complete!</h3>
                 <p className={`text-white/80 ${inter.variable} font-inter mb-6`}>
-                  Thank you! Your payment details have been submitted for verification.
+                  Welcome <span className="text-blue-300 font-medium">@{username}</span>!
                 </p>
-                <p className={`text-white/60 text-sm ${inter.variable} font-inter`}>
-                  Once verified, you will receive a confirmation email with further instructions.
-                </p>
+
+                {/* <div className="max-w-md mx-auto mt-4 mb-6 p-4 bg-blue-900/30 border border-blue-500/30 rounded-lg">
+                  <p className={`text-white/80 ${inter.variable} font-inter mb-4`}>
+                    You can now proceed to the competition platform.
+                  </p>
+                  <a
+                    href="https://your-competition-platform.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md transition-colors"
+                  >
+                    Start Trading
+                  </a>
+                </div> */}
+
+                {/* Password reset section */}
+                <div className="mt-6 max-w-md mx-auto">
+                  <button
+                    onClick={handlePasswordReset}
+                    className="px-5 py-2 bg-blue-900/50 text-white rounded-lg transition-colors hover:bg-blue-800/50 text-sm"
+                  >
+                    Need to reset your password?
+                  </button>
+
+                  {resetEmailSent && (
+                    <p className="text-green-400 mt-2 text-sm">
+                      Password reset email sent! Check your inbox.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
       </section>
-
-      <footer className="z-10 relative bg-[#000016]/80 backdrop-blur-sm py-8 border-t border-white/10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-10 md:px-15">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-0">
-            {/* Left - MCSE Logo */}
-            <div className="flex-shrink-0">
-              <Image
-                src="/mcsebanner.png"
-                alt="MCSE Logo"
-                width={200}
-                height={100}
-                className="object-contain"
-              />
-            </div>
-
-            {/* Center - Copyright Text */}
-            <div className="text-center">
-              <p className={`text-white/60 text-sm ${inter.variable} font-inter`}>
-                © {new Date().getFullYear()} All Rights Reserved. MU Mathematics Society.
-              </p>
-            </div>
-
-            {/* Right - Mathsoc Logo and Social Links */}
-            <div className="flex items-center">
-              <div className="mr-4">
-                <Image
-                  src="/mathsoclogo.png"
-                  alt="Mathsoc Logo"
-                  width={70}
-                  height={70}
-                  className="object-contain"
-                />
-              </div>
-              <div className="text-white flex flex-col items-start">
-                <p className={`${crimson.className} text-sm font-semibold`}>
-                  {"With <3"}
-                </p>
-                <p className={`${crimson.className} text-lg font-semibold mb-2`}>Mathsoc</p>
-                <div className="flex space-x-3">
-                  <a
-                    href="https://www.instagram.com/mathsoc.mu/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white/70 hover:text-white transition-colors"
-                  >
-                    <Instagram size={18} />
-                  </a>
-                  <a
-                    href="https://www.linkedin.com/company/mathematics-club-mu/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-white/70 hover:text-white transition-colors"
-                  >
-                    <Linkedin size={18} />
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
-      {/* Help/Contact Button */}
-      <div className="fixed bottom-6 right-6 z-50">
-        <button
-          onClick={() => setShowContactModal(!showContactModal)}
-          className="bg-blue-900/70 hover:bg-blue-800/90 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg backdrop-blur-sm transition-all hover:scale-105"
-          aria-label="Contact support"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-help-circle">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-            <path d="M12 17h.01" />
-          </svg>
-        </button>
-
-        {/* Contact Modal */}
-        {showContactModal && (
-          <div className="absolute bottom-16 right-0 w-72 bg-slate-900/95 backdrop-blur-sm border border-white/10 rounded-lg shadow-xl p-4 animate-fadeIn">
-            <div className="flex justify-between items-center mb-3">
-              <h4 className={`text-white text-lg ${crimson.className}`}>Need help?</h4>
-              <button
-                onClick={() => setShowContactModal(false)}
-                className="text-white/60 hover:text-white"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="space-y-3 mb-2">
-              {/* <div>
-                <p className="text-white/80 text-sm mb-1">Email us:</p>
-                <a href="mailto:mcse@mahindra.edu" className="text-blue-300 hover:text-blue-200 text-sm">mcse@mahindra.edu</a>
-              </div> */}
-              <div>
-                <p className="text-white/80 text-sm mb-1">Contact:</p>
-                <a href="tel:+919876543210" className="text-blue-300 hover:text-blue-200 text-sm">+91 99667 07911</a>
-              </div>
-              {/* <div>
-                <p className="text-white/80 text-sm mb-1">Join our Discord:</p>
-                <a href="https://discord.gg/mcse" target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:text-blue-200 text-sm">discord.gg/mcse</a>
-              </div> */}
-            </div>
-            <div className="text-white/50 text-xs mt-2 border-t border-white/10 pt-2">
-              Contact for help / Report any bugs
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };
