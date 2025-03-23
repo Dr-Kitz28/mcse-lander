@@ -1168,7 +1168,7 @@ export default function Home() {
 
                 <div className="mt-8 pt-6 border-t border-white/10">
                   <p className="text-white/50 text-sm text-center">
-                    Don't have an account? Please contact administrator or visit
+                    Don&apos;t have an account? Please contact administrator or visit
                     <a
                       href="https://unifest.in/fests/52?tab=competition&search=The%20Math%20Club%20Stock%20Exchange"
                       target="_blank"
