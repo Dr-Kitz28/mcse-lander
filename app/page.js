@@ -76,7 +76,6 @@ export default function Home() {
     // Create a timer that will delay the actual check
     const timer = setTimeout(async () => {
       try {
-        console.log("Checking username availability for:", debouncedUsername);
 
         // Check if username exists in the usernames collection
         const usernameDoc = await getDoc(doc(db, 'usernames', debouncedUsername));
@@ -87,7 +86,6 @@ export default function Home() {
           setUsernameError(null);
         }
       } catch (err) {
-        console.error('Error checking username:', err);
       } finally {
         setIsCheckingUsername(false);
       }
@@ -121,7 +119,6 @@ export default function Home() {
   //     setError(null);
   //     setSuccess("Password reset email sent! Please check your inbox and spam folder.");
   //   } catch (err) {
-  //     console.error("Password reset error:", err);
 
   //     // Handle specific Firebase Auth errors
   //     if (err.code === 'auth/user-not-found') {
@@ -188,11 +185,8 @@ export default function Home() {
       setError(null);
       setSuccess("Password reset email sent! Please check your inbox and spam folder.");
 
-      // Log for monitoring (in production, send to analytics)
-      console.info(`Password reset requested for: ${normalizedEmail.slice(0, 3)}...${normalizedEmail.slice(-4)}`);
 
     } catch (err) {
-      console.error("Password reset error:", err);
 
       // Handle specific Firebase Auth errors
       if (err.code === 'auth/user-not-found') {
@@ -227,7 +221,6 @@ export default function Home() {
       setSuccess(null);
       setError(null);
     } catch (err) {
-      console.error("Error signing out:", err);
       setError(`Failed to sign out: ${err.message}`);
     }
     setLoading(false);
@@ -247,7 +240,6 @@ export default function Home() {
 
   //     // Auth state listener will handle the rest
   //   } catch (err) {
-  //     console.error("Login error:", err);
 
   //     if (err.code === 'auth/invalid-email') {
   //       setError('Please enter a valid email address');
@@ -303,8 +295,6 @@ export default function Home() {
       setUser(currentUser);
 
     } catch (err) {
-      console.error("Login error:", err);
-
       // Update failed attempts
       loginAttempts.count++;
       loginAttempts.timestamp = now;
@@ -341,7 +331,6 @@ export default function Home() {
           const approvedEmailDoc = await getDoc(doc(db, 'approved_emails', currentUser.email));
 
           if (!approvedEmailDoc.exists()) {
-            console.log("Email not in approved list:", currentUser.email);
             setError("Your account is not authorized. Please contact administrator.");
             await auth.signOut();
             setUser(null);
@@ -351,7 +340,6 @@ export default function Home() {
 
           // Clean up email to lowercase for consistent querying
           const userEmail = currentUser.email.toLowerCase().trim();
-          console.log("Checking user profile for email:", userEmail);
 
           try {
             // Query user profiles by email field
@@ -368,7 +356,6 @@ export default function Home() {
               const profileDoc = profileSnapshot.docs[0];
               const userData = profileDoc.data();
 
-              console.log("Found user profile:", userData);
 
               // Check if username exists
               if (userData.username) {
@@ -379,23 +366,17 @@ export default function Home() {
                 setRegistrationStep('success');
                 setIsFirstLogin(false);
               } else {
-                // Profile exists but no username - redirect to profile setup
-                console.log("Profile exists but username not set, directing to profile setup");
                 setRegistrationStep('profile-setup');
                 setIsFirstLogin(true);
               }
             } else {
-              // Profile doesn't exist at all
-              console.log("Profile doesn't exist, proceeding to profile setup");
               setRegistrationStep('profile-setup');
               setIsFirstLogin(true);
             }
           } catch (profileError) {
-            console.error("Error retrieving user profile:", profileError);
 
             // Permission denied is expected for first-time users
             if (profileError.code === 'permission-denied') {
-              console.log("Permission denied for reading profile - proceeding to profile setup");
               setRegistrationStep('profile-setup');
               setIsFirstLogin(true);
             } else {
@@ -403,7 +384,6 @@ export default function Home() {
             }
           }
         } catch (error) {
-          console.error("Error checking approved email:", error);
           setError("An error occurred. Please try again.");
         }
       } else {
@@ -429,7 +409,6 @@ export default function Home() {
           const updatedUser = auth.currentUser;
 
           if (updatedUser && updatedUser.emailVerified) {
-            console.log("Email verified!");
             clearInterval(interval);
 
             try {
@@ -444,13 +423,13 @@ export default function Home() {
               }
 
             } catch (err) {
-              console.error("Error checking user profile:", err);
+
               // Default to profile setup if there's any error
               setRegistrationStep('profile-setup');
             }
           }
         } catch (err) {
-          console.error("Error checking verification:", err);
+
         }
       }, 3000);
     }
@@ -469,18 +448,16 @@ export default function Home() {
   // First, add this function at the top level of your component
   const checkUsernameAvailability = async (username) => {
     try {
-      console.log("Checking username availability for:", username);
+
 
       // Check directly in the usernames collection
       const usernameDoc = await getDoc(doc(db, 'usernames', username));
 
       // If document doesn't exist, username is available
       const isAvailable = !usernameDoc.exists();
-      console.log("Username is available:", isAvailable);
 
       return isAvailable;
     } catch (err) {
-      console.error("Error checking username:", err);
       return null; // Indicate error
     }
   };
@@ -599,7 +576,6 @@ export default function Home() {
 
   //     // Get normalized email
   //     const userEmail = user.email.toLowerCase().trim();
-  //     console.log("Using auth email:", userEmail);
 
   //     // Check if the user profile already exists (we're just adding the username)
   //     const userProfiles = await getDocs(
@@ -613,7 +589,6 @@ export default function Home() {
   //       // User profile exists - UPDATE instead of CREATE
   //       const profileDoc = userProfiles.docs[0];
   //       profileId = profileDoc.id;
-  //       console.log("Found existing profile - adding username to it:", profileId);
 
   //       // Update the existing profile with the username
   //       batch.update(doc(db, 'user_profiles', profileId), {
@@ -622,7 +597,6 @@ export default function Home() {
   //       });
   //     } else {
   //       // Profile doesn't exist - CREATE a new one
-  //       console.log("No existing profile found - creating new one");
 
   //       // Create profile data
   //       const profileData = {
@@ -655,7 +629,6 @@ export default function Home() {
 
   //     // Commit all changes
   //     await batch.commit();
-  //     console.log("Profile setup complete with ID:", profileId);
 
   //     // Store in localStorage
   //     localStorage.setItem('userUsername', username);
@@ -668,7 +641,6 @@ export default function Home() {
   //     setSuccess("Username has been set successfully!");
 
   //   } catch (err) {
-  //     console.error("Error setting up profile:", err);
   //     setError(`Failed to complete setup: ${err.message}`);
   //   }
 
@@ -719,7 +691,6 @@ export default function Home() {
 
       // Get normalized email
       const userEmail = normalizeEmail(user.email);
-      console.log("Using auth email:", userEmail);
 
       // Add a transaction for atomicity
       const userProfiles = await getDocs(
@@ -742,7 +713,6 @@ export default function Home() {
         // Existing profile - UPDATE instead of CREATE
         const profileDoc = userProfiles.docs[0];
         profileId = profileDoc.id;
-        console.log("Found existing profile - adding username to it:", profileId);
 
         // Don't use batch for this first operation
         try {
@@ -751,14 +721,10 @@ export default function Home() {
             updatedAt: new Date().toISOString(),
             lastLogin: new Date().toISOString()
           }, { merge: true });
-          console.log("Updated existing profile with username");
         } catch (updateError) {
-          console.error("Error updating profile:", updateError);
           throw updateError;
         }
       } else {
-        // No profile - CREATE new one
-        console.log("No existing profile found - creating new one");
 
         // Profile data
         const profileData = {
@@ -774,9 +740,7 @@ export default function Home() {
           // Create with separate operation
           const profileRef = await addDoc(collection(db, 'user_profiles'), profileData);
           profileId = profileRef.id;
-          console.log("Created new profile with ID:", profileId);
         } catch (createError) {
-          console.error("Error creating profile:", createError);
           throw createError;
         }
       }
@@ -788,9 +752,7 @@ export default function Home() {
           profileId: profileId,
           createdAt: new Date().toISOString()
         });
-        console.log("Username document created");
       } catch (usernameError) {
-        console.error("Error creating username document:", usernameError);
         throw usernameError;
       }
 
@@ -809,7 +771,6 @@ export default function Home() {
       setSuccess("Username has been set successfully!");
 
     } catch (err) {
-      console.error("Error setting up profile:", err);
 
       if (err.code === 'permission-denied') {
         setError("Permission denied. Please check your account permissions.");
@@ -835,7 +796,6 @@ export default function Home() {
           const updatedUser = auth.currentUser;
 
           if (updatedUser && updatedUser.emailVerified) {
-            console.log("Email verified, proceeding to profile setup");
             clearInterval(interval);
 
             try {
@@ -850,13 +810,11 @@ export default function Home() {
                 setRegistrationStep('profile-setup');
               }
             } catch (firestoreErr) {
-              console.error("Error checking user profile:", firestoreErr);
               // Default to profile setup
               setRegistrationStep('profile-setup');
             }
           }
         } catch (err) {
-          console.error("Error checking verification:", err);
         }
       }, 3000);
     }
