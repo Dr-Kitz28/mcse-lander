@@ -4,6 +4,15 @@ const nextConfig = {
     async headers() {
         return [
             {
+                source: '/bgfinal.mp4',
+                headers: [
+                    {
+                        key: 'Cache-Control',
+                        value: 'public, max-age=31536000, immutable',
+                    },
+                ],
+            },
+            {
                 source: '/:path*',
                 headers: [
                     // Prevent browsers from incorrectly detecting non-scripts as scripts

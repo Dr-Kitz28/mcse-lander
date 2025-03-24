@@ -875,18 +875,36 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Left Card - styled like How To cards */}
-            <div className="text-center backdrop-blur-sm p-8 rounded-lg border border-blue-500/20 shadow-lg bg-blue-900/10">
-              <div className="flex justify-center mb-6">
-                <TrendingUp size={48} className="text-blue-300" />
+            <div className="text-center backdrop-blur-sm p-8 rounded-lg border border-blue-500/20 shadow-lg bg-blue-900/10 flex flex-col h-full justify-between">
+              <div>
+                <div className="flex justify-center mb-6">
+                  <TrendingUp size={48} className="text-blue-300" />
+                </div>
+                <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>
+                  What we offer
+                </h3>
+                <p className={`text-white/80 ${inter.variable} font-inter leading-relaxed`}>
+                  Compete in a dynamic stock market simulation where university clubs act as companies! Trade in real-time, analyze market trends, and refine your investment strategies to build the strongest portfolio. Experience fast-paced trading with live updates and strategic decision-making to maximize your returns over the 3-day event.
+                </p>
               </div>
-              <h3 className={`text-2xl text-white font-semibold mb-4 ${crimson.className}`}>
-                What we offer
-              </h3>
-              <p className={`text-white/80 ${inter.variable} font-inter leading-relaxed`}>
-                Engage in a simulated stock market environment where you can compete with other clubs
-                and learn real-time trading strategies. Build your portfolio, analyze market trends,
-                and make strategic investment decisions to maximize your returns.
-              </p>
+
+              {/* Visual bottom section to fill space */}
+              <div className="mt-8 pt-4 border-t border-blue-500/20">
+                <div className="flex justify-center space-x-8">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-300">3</div>
+                    <div className="text-white/60 text-sm">Days</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-300">15+</div>
+                    <div className="text-white/60 text-sm">Clubs</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-300">₹50k+</div>
+                    <div className="text-white/60 text-sm">Prize Pool</div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Right Card - styled like How To cards */}
@@ -905,22 +923,18 @@ export default function Home() {
 
               {/* Timeline Design */}
               <div className="relative pt-2 pb-1">
-
+                {/* Vertical timeline line */}
                 <div className="absolute left-1/2 transform -translate-x-1/2 h-full w-0.5 bg-blue-500/30"></div>
 
-
                 <div className={`${inter.variable} font-inter text-sm`}>
-                  {/* Item 1 */}
-                  <div className="relative flex items-center justify-between mb-4">
+                  {/* Registration Opens */}
+                  <div className="relative flex items-center justify-between mb-8">
                     <div className="w-5/12 pr-2 text-right">
                       <p className="font-medium text-white">Registration opens</p>
                     </div>
                     <div className="absolute left-1/2 transform -translate-x-1/2 z-10">
-                      {/* Fix the pulsing animation to be properly centered */}
                       <div className="relative flex items-center justify-center">
-                        {/* Centered pulsing circle with proper positioning */}
                         <div className="absolute w-4 h-4 rounded-full bg-green-500/30 animate-ping"></div>
-                        {/* Static inner circle centered inside */}
                         <div className="relative w-3 h-3 rounded-full bg-green-500 border-2 border-green-300"></div>
                       </div>
                     </div>
@@ -929,21 +943,32 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Item 2 */}
-                  <div className="relative flex items-center justify-between mb-4">
+                  {/* IPO Applications Open */}
+                  <div className="relative flex items-center justify-between mb-8">
                     <div className="w-5/12 pr-2 text-right">
-                      <p className="font-medium text-white">IPO Listing</p>
+                      <p className="font-medium text-white">IPO Applications</p>
                     </div>
                     <div className="absolute left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300 z-10"></div>
                     <div className="w-5/12 pl-2 text-left">
-                      <p className="text-white/70">April 1</p>
+                      <p className="text-white/70">April 1-3</p>
                     </div>
                   </div>
 
-                  {/* Item 3 */}
-                  <div className="relative flex items-center justify-between mb-4">
+                  {/* IPO Allotment */}
+                  <div className="relative flex items-center justify-between mb-8">
                     <div className="w-5/12 pr-2 text-right">
-                      <p className="font-medium text-white">IPO Allotment, Market Opens</p>
+                      <p className="font-medium text-white">IPO Allotment</p>
+                    </div>
+                    <div className="absolute left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300 z-10"></div>
+                    <div className="w-5/12 pl-2 text-left">
+                      <p className="text-white/70">April 3</p>
+                    </div>
+                  </div>
+
+                  {/* IPO Listing */}
+                  <div className="relative flex items-center justify-between mb-8">
+                    <div className="w-5/12 pr-2 text-right">
+                      <p className="font-medium text-white">IPO Listing, Market Opens</p>
                     </div>
                     <div className="absolute left-1/2 transform -translate-x-1/2 w-3 h-3 rounded-full bg-blue-500 border-2 border-blue-300 z-10"></div>
                     <div className="w-5/12 pl-2 text-left">
@@ -951,7 +976,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Item 4 */}
+                  {/* Closing Ceremony */}
                   <div className="relative flex items-center justify-between">
                     <div className="w-5/12 pr-2 text-right">
                       <p className="font-medium text-white">Closing Ceremony</p>
@@ -1045,10 +1070,10 @@ export default function Home() {
               <form className={`${inter.variable} font-inter animate-fadeIn`} onSubmit={handleLoginSubmit}>
                 <div className="mb-8 text-center">
                   <h2 className={`text-2xl text-white font-semibold ${crimson.className}`}>
-                    Sign In to MCSE
+                    Sign in to MCSE
                   </h2>
                   <p className="text-white/60 mt-2">
-                    If you have already registered, your account will be processed within one hour at most.
+                    Your login credentials will be sent to you via email.
                   </p>
                 </div>
 
@@ -1135,6 +1160,9 @@ export default function Home() {
                     >
                       the registration site
                     </a>.
+                  </p>
+                  <p className='text-white/50 text-sm text-center mt-2'>
+                    If you have already registered, your account will be processed within one hour at most.
                   </p>
                 </div>
               </form>
