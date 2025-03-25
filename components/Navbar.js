@@ -46,7 +46,7 @@ export default function Navbar() {
                 <div className="md:hidden flex">
                     <Link href="/#register">
                         <button className={`px-5 py-2 bg-blue-950/80 hover:bg-blue-900 text-white rounded-lg transition-colors text-xl ${crimson.className}`}>
-                            Register
+                            Sign In
                         </button>
                     </Link>
                 </div>
